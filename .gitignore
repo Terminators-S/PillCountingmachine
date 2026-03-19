@@ -5,6 +5,8 @@ node_modules
 .next
 dist
 coverage
+*.tsbuildinfo
+*.tgz
 
 # Env
 .env
@@ -26,6 +28,7 @@ yarn-debug.log*
 yarn-error.log*
 .vercel
 logs
+gcm-diagnose.log
 
 # Local tooling
 .playwright-cli
@@ -33,3 +36,8 @@ logs
 # Secrets
 serviceAccountKey.json
 tmp_login.json
+
+# Local database files
+*.db
+*.db-shm
+*.db-wal
