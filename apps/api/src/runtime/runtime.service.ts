@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { ChildProcessWithoutNullStreams, spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createInterface, Interface } from 'node:readline';
 import ExcelJS from 'exceljs';
 import {
@@ -1015,16 +1015,16 @@ export class RuntimeService implements OnModuleDestroy {
 
   private resolveBridgeScriptPath(mlProjectPath: string) {
     const configuredPath = this.configService.get<string>('ML_BRIDGE_SCRIPT_PATH');
-    return resolve(configuredPath || `${mlProjectPath}\\live_runtime_bridge.py`);
+    return resolve(configuredPath || join(mlProjectPath, 'live_runtime_bridge.py'));
   }
 
   private resolveModelCatalogPath(mlProjectPath: string) {
     const configuredPath = this.configService.get<string>('ML_MODEL_CATALOG_PATH');
-    return resolve(configuredPath || `${mlProjectPath}\\model_catalog.json`);
+    return resolve(configuredPath || join(mlProjectPath, 'model_catalog.json'));
   }
 
   private prepareMergedCatalogPath(mlProjectPath: string, catalog: MachineRuntimeModelCatalog) {
-    const generatedCatalogPath = resolve(`${mlProjectPath}\\runtime_catalog.generated.json`);
+    const generatedCatalogPath = resolve(join(mlProjectPath, 'runtime_catalog.generated.json'));
     writeFileSync(generatedCatalogPath, JSON.stringify(catalog, null, 2), 'utf-8');
     return generatedCatalogPath;
   }

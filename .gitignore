@@ -1,5 +1,7 @@
 # Dependencies
 node_modules
+.venv
+__pycache__/
 
 # Build outputs
 .next
@@ -41,3 +43,6 @@ tmp_login.json
 *.db
 *.db-shm
 *.db-wal
+
+# Machine learning runtime cache
+machine-learning/runtime_catalog.generated.json

@@ -343,6 +343,7 @@ This is useful for Vercel previews or UI demos before a real backend is connecte
 apps/
   api/                  NestJS API + Prisma + PostgreSQL integration
   web/                  Next.js App Router web console
+machine-learning/       Deployable ML runtime for the live machine flow
 packages/
   shared/               shared zod schemas, constants, and types
   ui/                   reusable UI building blocks
@@ -354,7 +355,7 @@ docs/
 legacy/                 older code retained for reference
 ```
 
-Important note: the active runtime is `apps/web` plus `apps/api`. There is also older prototype code in `legacy/` and `apps/web/src` that is not the primary production path.
+Important note: the active runtime is `apps/web` plus `apps/api` plus the deployable ML runtime in `machine-learning/`. There is also older prototype code in `legacy/` and `apps/web/src` that is not the primary production path.
 
 ## Local Development
 
@@ -474,8 +475,24 @@ bash scripts/raspberry-pi/start-roboflow-inference.sh
 - `ROBOFLOW_API_KEY`
 - `ROBOFLOW_INFERENCE_SERVER_URL=http://127.0.0.1:9001`
 - `ML_DEVICE_PROFILE=raspberry-pi-5`
+- `ML_PROJECT_PATH=/home/pi/pill-count-ui/machine-learning`
+- `ML_BRIDGE_SCRIPT_PATH=/home/pi/pill-count-ui/machine-learning/live_runtime_bridge.py`
+- `ML_MODEL_CATALOG_PATH=/home/pi/pill-count-ui/machine-learning/model_catalog.json`
 
 The Pi device profile automatically lowers capture size, inference size, snapshot quality, and refresh frequency to fit Raspberry Pi 5 better than the desktop defaults.
+
+## In-Repo ML Runtime
+
+The repository now includes a deployable ML runtime in `machine-learning/`.
+
+That folder contains:
+
+- the live Python bridge
+- the model registry
+- the Roboflow runtime metadata
+- the three local model weights used by the default offline ensemble
+
+It intentionally does not include the full training archive, old `runs/` experiments, or large dataset zip files. Those remain outside Git so the repository stays deployable and within GitHub file-size limits.
 
 ## Live SQL Watcher
 

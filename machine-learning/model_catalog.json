@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-19",
+  "defaultModelKey": "ensemble-local-best",
+  "models": [
+    {
+      "key": "ensemble-local-best",
+      "name": "Ensemble local best",
+      "provider": "ensemble",
+      "recommendedForCounting": true,
+      "components": ["local-train12", "local-train10", "local-train7"],
+      "notes": "Free local-only ensemble. Uses the three included local models and does not require a Roboflow API key.",
+      "sourceUrl": "file://machine-learning/model_catalog.json"
+    },
+    {
+      "key": "local-train12",
+      "name": "Local train12 best",
+      "provider": "local",
+      "recommendedForCounting": true,
+      "path": "models/local/train12/best.pt",
+      "classes": ["capsules", "tablets"],
+      "notes": "Current best local run at 960px. Good default for offline counting.",
+      "metrics": {
+        "precision": 0.91995,
+        "recall": 0.88774,
+        "map50": 0.94136,
+        "map50_95": 0.60026
+      },
+      "sourceUrl": "file://machine-learning/models/local/train12/best.pt"
+    },
+    {
+      "key": "local-train10",
+      "name": "Local train10 best",
+      "provider": "local",
+      "recommendedForCounting": true,
+      "path": "models/local/train10/best.pt",
+      "classes": ["capsules", "tablets"],
+      "notes": "YOLOv8s local run. Useful as a fallback local detector.",
+      "metrics": {
+        "precision": 0.88767,
+        "recall": 0.87724,
+        "map50": 0.92189,
+        "map50_95": 0.55711
+      },
+      "sourceUrl": "file://machine-learning/models/local/train10/best.pt"
+    },
+    {
+      "key": "local-train7",
+      "name": "Local train7 best",
+      "provider": "local",
+      "recommendedForCounting": true,
+      "path": "models/local/train7/best.pt",
+      "classes": ["capsules", "tablets"],
+      "notes": "YOLOv8n local run. Fastest local candidate but less accurate than train12.",
+      "metrics": {
+        "precision": 0.89716,
+        "recall": 0.86471,
+        "map50": 0.92739,
+        "map50_95": 0.57694
+      },
+      "sourceUrl": "file://machine-learning/models/local/train7/best.pt"
+    },
+    {
+      "key": "rf-pill-detection-v3-edge",
+      "name": "Roboflow pill detection v3 edge",
+      "provider": "roboflow",
+      "deploymentTarget": "ondevice",
+      "inferenceServerUrl": "http://127.0.0.1:9001",
+      "recommendedForCounting": true,
+      "modelId": "pill-detection-fnftd/3",
+      "classes": ["capsules", "tablets"],
+      "notes": "Roboflow on-device model for the local Inference Server. Best fit for Raspberry Pi 5 or other edge deployments.",
+      "metrics": {
+        "precision": 0.929,
+        "recall": 0.876,
+        "map50": 0.934
+      },
+      "sourceUrl": "https://universe.roboflow.com/pill-detection-cun5i/pill-detection-fnftd/model/3"
+    },
+    {
+      "key": "rf-pill-detection-v3",
+      "name": "Roboflow pill detection v3",
+      "provider": "roboflow",
+      "deploymentTarget": "hosted",
+      "recommendedForCounting": true,
+      "modelId": "pill-detection-fnftd/3",
+      "classes": ["capsules", "tablets"],
+      "notes": "Hosted YOLOv11 model trained on the same 3,114-image dataset currently in this project.",
+      "metrics": {
+        "precision": 0.929,
+        "recall": 0.876,
+        "map50": 0.934
+      },
+      "sourceUrl": "https://universe.roboflow.com/pill-detection-cun5i/pill-detection-fnftd/model/3"
+    },
+    {
+      "key": "rf-pill-detection-rfdetr",
+      "name": "Roboflow pill detection RF-DETR",
+      "provider": "roboflow",
+      "deploymentTarget": "hosted",
+      "recommendedForCounting": true,
+      "modelId": "pill-detection-fnftd-trh1s/2",
+      "classes": ["capsules", "tablets"],
+      "notes": "Hosted RF-DETR Nano retrain on a 3.1k-image pill dataset. Best hosted pill/tablet candidate from the search.",
+      "metrics": {
+        "precision": 0.947,
+        "recall": 0.91,
+        "map50": 0.955
+      },
+      "sourceUrl": "https://universe.roboflow.com/detectproject-cicmf/pill-detection-fnftd-trh1s/model/2"
+    }
+  ]
+}
