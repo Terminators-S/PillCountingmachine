@@ -1,0 +1,35 @@
+{
+  "name": "pillcount-enterprise-platform",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w @pillcount/api\" \"npm run dev -w @pillcount/web\" \"npm run db:watch\"",
+    "dev:api": "npm run dev -w @pillcount/api",
+    "dev:web": "npm run dev -w @pillcount/web",
+    "dev:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\start-local.ps1",
+    "dev:machine": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\start-live-machine.ps1",
+    "dev:machine:public": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\start-live-machine-public.ps1",
+    "db:apply": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\apply-live-sql.ps1",
+    "db:dump": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\dump-postgres.ps1",
+    "db:view": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\export-live-data.ps1",
+    "db:watch": "node scripts\\watch-live-sql.js",
+    "build": "npm run build -w @pillcount/shared && npm run build -w @pillcount/ui && npm run build -w @pillcount/api && npm run build -w @pillcount/web",
+    "lint": "npm run lint -w @pillcount/api && npm run lint -w @pillcount/web",
+    "test": "npm run test -w @pillcount/api",
+    "prisma:generate": "npm run prisma:generate -w @pillcount/api",
+    "prisma:migrate": "npm run prisma:migrate -w @pillcount/api",
+    "prisma:push": "npm run prisma:push -w @pillcount/api",
+    "prisma:seed": "npm run prisma:seed -w @pillcount/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "firebase": "^12.10.0"
+  }
+}

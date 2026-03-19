@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pillcount-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pillcount
+      POSTGRES_USER: pillcount
+      POSTGRES_PASSWORD: pillcount
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pillcount -d pillcount']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: pillcount-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://pillcount:pillcount@postgres:5432/pillcount?schema=public
+      JWT_ACCESS_SECRET: change-this-access-secret
+      JWT_REFRESH_SECRET: change-this-refresh-secret
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 7d
+      LOW_STOCK_THRESHOLD: 20
+      EXPIRY_ALERT_DAYS: 30
+    ports:
+      - '4000:4000'
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: pillcount-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api
+      NEXT_PUBLIC_STORE_NAME: PillCount Pharmacy
+    ports:
+      - '3000:3000'
+
+volumes:
+  postgres_data:

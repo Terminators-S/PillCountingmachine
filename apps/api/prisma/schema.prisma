@@ -1,0 +1,354 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleCode {
+  ADMIN
+  SUPERVISOR
+  OPERATOR
+  AUDITOR
+  VIEWER
+  API_ONLY
+}
+
+enum MachineStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+  UNKNOWN
+}
+
+enum InventoryTxnType {
+  RECEIVE
+  DISPENSE
+  ADJUST
+  TRANSFER
+  RESERVE
+  RELEASE
+  QUARANTINE
+  WASTE
+  CYCLE_COUNT
+}
+
+enum JobStatus {
+  CREATED
+  IN_PROGRESS
+  COMPLETED
+  NEEDS_RECOUNT
+  CANCELLED
+}
+
+enum AuditActorType {
+  USER
+  API_KEY
+  SYSTEM
+}
+
+model User {
+  id              String             @id @default(uuid())
+  email           String             @unique
+  fullName        String
+  passwordHash    String
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  refreshTokens   RefreshToken[]
+  userRoles       UserRole[]
+  createdJobs     CountingJob[]      @relation("JobCreatedBy")
+  assignedJobs    CountingJob[]      @relation("JobOperator")
+  jobProgress     JobProgress[]
+  jobEvidence     JobEvidence[]
+  inventoryOps    InventoryTransaction[] @relation("InventoryOperator")
+  inventoryApprovals InventoryTransaction[] @relation("InventoryApprover")
+  apiKeysCreated  ApiKey[]           @relation("ApiKeyCreatedBy")
+  cycleCountSessions CycleCountSession[]
+  auditLogs       AuditLog[]
+}
+
+model Role {
+  id        String   @id @default(uuid())
+  code      RoleCode @unique
+  name      String
+  userRoles UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  name        String
+  keyPrefix   String   @unique
+  keyHash     String
+  scopes      String[] @default([])
+  isActive    Boolean  @default(true)
+  createdById String?
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   User?    @relation("ApiKeyCreatedBy", fields: [createdById], references: [id])
+  auditLogs   AuditLog[]
+
+  @@index([isActive])
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Machine {
+  id              String                 @id @default(uuid())
+  machineCode     String                 @unique
+  displayName     String?
+  location        String
+  firmwareVersion String
+  status          MachineStatus          @default(UNKNOWN)
+  lastSeen        DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  events          MachineEvent[]
+  jobs            CountingJob[]
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([status, lastSeen])
+}
+
+model MachineEvent {
+  id             String   @id @default(uuid())
+  machineId      String
+  eventType      String
+  payload        Json?
+  occurredAt     DateTime
+  receivedAt     DateTime @default(now())
+  idempotencyKey String   @unique
+  sourceIp       String?
+  sourceUserAgent String?
+  machine        Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@index([machineId, eventType, occurredAt(sort: Desc)])
+  @@index([occurredAt(sort: Desc)])
+}
+
+model PillType {
+  id              String                  @id @default(uuid())
+  code            String                  @unique
+  name            String
+  dosageMg        Int?
+  manufacturer    String?
+  barcode         String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  lots            Lot[]
+  balances        InventoryBalance[]
+  transactions    InventoryTransaction[]
+  jobs            CountingJob[]
+  cycleCountItems CycleCountItem[]
+
+  @@index([name])
+}
+
+model Lot {
+  id             String                  @id @default(uuid())
+  pillTypeId     String
+  lotNumber      String
+  expiryDate     DateTime
+  receivedDate   DateTime
+  unitCost       Decimal                 @db.Decimal(12, 4)
+  location       String
+  isQuarantined  Boolean                 @default(false)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  pillType       PillType                @relation(fields: [pillTypeId], references: [id], onDelete: Cascade)
+  balances       InventoryBalance[]
+  transactions   InventoryTransaction[]
+  cycleCountItems CycleCountItem[]
+  preferredJobs  CountingJob[]           @relation("JobLotPreference")
+
+  @@unique([pillTypeId, lotNumber])
+  @@index([expiryDate])
+  @@index([location])
+}
+
+model InventoryBalance {
+  id           String   @id @default(uuid())
+  pillTypeId   String
+  lotId        String
+  location     String
+  onHand       Int      @default(0)
+  reserved     Int      @default(0)
+  quarantined  Int      @default(0)
+  updatedAt    DateTime @updatedAt
+  pillType     PillType @relation(fields: [pillTypeId], references: [id], onDelete: Cascade)
+  lot          Lot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  @@unique([pillTypeId, lotId, location])
+  @@index([location])
+}
+
+model InventoryTransaction {
+  id             String            @id @default(uuid())
+  txnType        InventoryTxnType
+  pillTypeId     String
+  lotId          String?
+  machineId      String?
+  jobId          String?
+  operatorId     String?
+  approvedById   String?
+  location       String
+  fromLocation   String?
+  toLocation     String?
+  quantity       Int
+  idempotencyKey String?           @unique
+  referenceType  String?
+  referenceId    String?
+  reason         String?
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+  pillType       PillType          @relation(fields: [pillTypeId], references: [id], onDelete: Restrict)
+  lot            Lot?              @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  machine        Machine?          @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  job            CountingJob?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  operator       User?             @relation("InventoryOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  approvedBy     User?             @relation("InventoryApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([pillTypeId, createdAt(sort: Desc)])
+  @@index([lotId, createdAt(sort: Desc)])
+  @@index([location, createdAt(sort: Desc)])
+  @@index([jobId])
+}
+
+model CountingJob {
+  id             String                  @id @default(uuid())
+  jobNumber      String                  @unique
+  machineId      String
+  pillTypeId     String
+  targetQty      Int
+  actualQty      Int?
+  lotPreferenceId String?
+  tolerancePct   Decimal                 @default(2.00) @db.Decimal(5, 2)
+  status         JobStatus               @default(CREATED)
+  createdById    String
+  operatorId     String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  recountOfJobId String?
+  notes          String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  machine        Machine                 @relation(fields: [machineId], references: [id], onDelete: Restrict)
+  pillType       PillType                @relation(fields: [pillTypeId], references: [id], onDelete: Restrict)
+  lotPreference  Lot?                    @relation("JobLotPreference", fields: [lotPreferenceId], references: [id], onDelete: SetNull)
+  createdBy      User                    @relation("JobCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  operator       User?                   @relation("JobOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  recountOf      CountingJob?            @relation("JobRecount", fields: [recountOfJobId], references: [id], onDelete: SetNull)
+  recounts       CountingJob[]           @relation("JobRecount")
+  progress       JobProgress[]
+  evidence       JobEvidence[]
+  transactions   InventoryTransaction[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([machineId, status])
+}
+
+model JobProgress {
+  id         String      @id @default(uuid())
+  jobId       String
+  progressQty Int
+  message     String?
+  createdById String?
+  createdAt   DateTime   @default(now())
+  job         CountingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdBy   User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([jobId, createdAt(sort: Desc)])
+}
+
+model JobEvidence {
+  id           String      @id @default(uuid())
+  jobId         String
+  url           String
+  evidenceType  String?
+  uploadedById  String?
+  createdAt     DateTime   @default(now())
+  job           CountingJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  uploadedBy    User?      @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([jobId])
+}
+
+model CycleCountSession {
+  id          String           @id @default(uuid())
+  location    String
+  startedById String
+  notes       String?
+  startedAt   DateTime         @default(now())
+  completedAt DateTime?
+  startedBy   User             @relation(fields: [startedById], references: [id], onDelete: Restrict)
+  items       CycleCountItem[]
+
+  @@index([location, startedAt(sort: Desc)])
+}
+
+model CycleCountItem {
+  id             String            @id @default(uuid())
+  sessionId      String
+  lotId          String
+  pillTypeId     String
+  expectedQty    Int
+  countedQty     Int
+  delta          Int
+  createdAt      DateTime          @default(now())
+  session        CycleCountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  lot            Lot               @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  pillType       PillType          @relation(fields: [pillTypeId], references: [id], onDelete: Restrict)
+
+  @@index([sessionId])
+}
+
+model AuditLog {
+  id          BigInt        @id @default(autoincrement())
+  actorType   AuditActorType
+  actorUserId String?
+  actorApiKeyId String?
+  action      String
+  resourceType String
+  resourceId  String?
+  requestId   String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  actorUser   User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorApiKey ApiKey?       @relation(fields: [actorApiKeyId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([resourceType, resourceId])
+  @@index([actorUserId])
+}

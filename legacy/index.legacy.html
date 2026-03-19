@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PillCount Pro | Machine Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://alcdn.msauth.net/browser/2.39.0/js/msal-browser.min.js"></script>
+    <script src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        panel: '#0f172a',
+                        panelSoft: '#1e293b',
+                        accent: '#38bdf8',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        danger: '#ef4444'
+                    },
+                    boxShadow: {
+                        glow: '0 0 0 1px rgba(56, 189, 248, 0.12), 0 10px 35px rgba(2, 8, 23, 0.65)'
+                    }
+                }
+            }
+        };
+    </script>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased">
+<div class="min-h-screen lg:flex">
+    <aside class="lg:w-72 bg-panel border-r border-slate-800 p-6 lg:p-8">
+        <p class="text-xs tracking-[0.2em] uppercase text-slate-400">Medical IoT</p>
+        <h1 class="text-2xl font-bold mt-2 text-accent">PillCount Pro</h1>
+        <div class="mt-8 rounded-2xl bg-slate-900/60 border border-slate-800 p-4">
+            <p class="text-xs uppercase tracking-wide text-slate-400">Backend Status</p>
+            <p id="connectionStatus" class="mt-2 text-sm font-semibold text-warning">Checking API...</p>
+            <p id="lastSync" class="mt-2 text-xs text-slate-400">Not synced yet</p>
+        </div>
+        <div class="mt-4 rounded-2xl bg-slate-900/60 border border-slate-800 p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wide text-slate-400">User Login (Email)</p>
+            <input id="emailInput" type="email" placeholder="you@email.com" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+            <input id="codeInput" type="text" maxlength="6" placeholder="6-digit code" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+            <button id="sendCodeBtn" class="w-full bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-semibold rounded-lg py-2 text-sm">Send Verify Code</button>
+            <button id="verifyCodeBtn" class="w-full bg-indigo-300 hover:bg-indigo-200 text-slate-950 font-semibold rounded-lg py-2 text-sm">Verify & Login</button>
+            <p id="emailDeliveryStatus" class="text-xs text-slate-500">Checking email delivery settings...</p>
+            <p id="devCodePreview" class="hidden text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-1"></p>
+
+            <div id="quickLoginWrap" class="pt-2 space-y-2">
+                <p class="text-xs uppercase tracking-wide text-slate-400">Quick Login (Static Code)</p>
+                <select id="quickRoleSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                    <option value="admin">Admin</option>
+                    <option value="developer">Developer</option>
+                    <option value="operator">Operator (read-only)</option>
+                </select>
+                <input id="quickCodeInput" type="password" placeholder="Enter static quick code" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                <button id="quickLoginBtn" class="w-full bg-fuchsia-500 hover:bg-fuchsia-400 text-slate-950 font-semibold rounded-lg py-2 text-sm">Quick Login</button>
+                <p id="quickLoginStatus" class="text-xs text-slate-500">Set codes in .env to enable each role.</p>
+            </div>
+
+            <div id="googleSignInWrap" class="pt-2">
+                <p class="text-xs uppercase tracking-wide text-slate-400 mb-2">Other Sign-In Methods</p>
+                <div id="googleSignInBtn" class="flex justify-center"></div>
+                <p id="googleStatus" class="text-xs text-slate-500 mt-2">Google sign-in is not configured.</p>
+                <button id="appleBtn" type="button" class="mt-2 w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg py-2 text-sm">Sign in with Apple</button>
+                <p id="appleStatus" class="text-xs text-slate-500">Apple sign-in is not configured.</p>
+                <button id="microsoftBtn" type="button" class="mt-2 w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg py-2 text-sm">Sign in with Microsoft</button>
+                <p id="microsoftStatus" class="text-xs text-slate-500">Microsoft sign-in is not configured.</p>
+            </div>
+            <button id="logoutBtn" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg py-2 text-sm">Logout</button>
+            <p id="authStatus" class="text-xs text-slate-500">Not logged in</p>
+        </div>
+        <div class="mt-4 rounded-2xl bg-slate-900/60 border border-slate-800 p-4 space-y-2">
+            <p class="text-xs uppercase tracking-wide text-slate-400">API Key (Optional)</p>
+            <input id="apiKeyInput" type="password" placeholder="Enter API key" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+            <button id="saveApiKeyBtn" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg py-2 text-sm">Save Key</button>
+            <p class="text-xs text-slate-500">Used for protected write endpoints.</p>
+        </div>
+    </aside>
+
+    <main class="relative flex-1 p-6 md:p-8 xl:p-10">
+        <div id="authOverlay" class="hidden absolute inset-0 z-20 bg-slate-950/90 backdrop-blur-sm rounded-xl border border-slate-800 p-8 flex items-center justify-center text-center">
+            <div>
+                <h3 class="text-2xl font-semibold">Sign in required</h3>
+                <p class="mt-2 text-slate-400">Please login with email code or Google to use the dashboard.</p>
+            </div>
+        </div>
+        <div id="appContent" class="space-y-8">
+        <header class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h2 class="text-3xl font-semibold">Pill Counter Machine Dashboard</h2>
+                <p class="text-slate-400 mt-1">Record pills, manage pill types, and monitor IoT devices with local database storage.</p>
+            </div>
+            <button id="refreshBtn" class="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-sm">Refresh Now</button>
+        </header>
+
+        <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+            <article class="rounded-2xl bg-panelSoft border border-slate-800 p-6 shadow-glow">
+                <p class="text-sm text-slate-400">Total Pills</p>
+                <p id="totalPills" class="text-4xl font-bold mt-3">0</p>
+            </article>
+            <article class="rounded-2xl bg-panelSoft border border-slate-800 p-6 shadow-glow">
+                <p class="text-sm text-slate-400">Records</p>
+                <p id="totalRecords" class="text-4xl font-bold mt-3">0</p>
+            </article>
+            <article class="rounded-2xl bg-panelSoft border border-slate-800 p-6 shadow-glow">
+                <p class="text-sm text-slate-400">Machines Online</p>
+                <p id="machinesOnline" class="text-4xl font-bold mt-3">0</p>
+            </article>
+            <article class="rounded-2xl bg-panelSoft border border-slate-800 p-6 shadow-glow">
+                <p class="text-sm text-slate-400">Pill Types</p>
+                <p id="totalTypes" class="text-4xl font-bold mt-3">0</p>
+            </article>
+        </section>
+
+        <section class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <form id="pillTypeForm" class="rounded-2xl bg-panelSoft border border-slate-800 p-6 space-y-4">
+                <h3 class="text-lg font-semibold">Add Pill Type</h3>
+                <input name="code" required placeholder="Code (e.g. AMOX500)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                <input name="name" required placeholder="Name" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                <input name="dosageMg" type="number" min="0" placeholder="Dosage mg" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                <input name="manufacturer" placeholder="Manufacturer" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                <button class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold rounded-lg py-2">Save Pill Type</button>
+            </form>
+
+            <form id="machineForm" class="rounded-2xl bg-panelSoft border border-slate-800 p-6 space-y-4">
+                <h3 class="text-lg font-semibold">Register IoT Machine</h3>
+                <input name="machineId" required placeholder="Machine ID (e.g. MC-001)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                <input name="location" placeholder="Location" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                <input name="firmwareVersion" placeholder="Firmware version" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                <button class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold rounded-lg py-2">Register Machine</button>
+                <button type="button" id="heartbeatBtn" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg py-2 text-sm">Send Heartbeat</button>
+            </form>
+
+            <form id="recordForm" class="rounded-2xl bg-panelSoft border border-slate-800 p-6 space-y-4">
+                <h3 class="text-lg font-semibold">Record Pill Count</h3>
+                <input name="machineId" required placeholder="Machine ID" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                <select id="pillTypeSelect" name="pillTypeCode" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                    <option value="">Select pill type</option>
+                </select>
+                <input name="quantity" required min="0" type="number" placeholder="Quantity" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                <select name="countMode" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                    <option value="auto">Auto</option>
+                    <option value="manual">Manual</option>
+                    <option value="ml-verified">ML Verified</option>
+                </select>
+                <input name="confidence" type="number" step="0.01" min="0" max="1" placeholder="ML Confidence (0-1)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                <button class="w-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold rounded-lg py-2">Record Count</button>
+            </form>
+        </section>
+
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <div class="rounded-2xl bg-panelSoft border border-slate-800 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">Connected Machines</h3>
+                    <span id="machineCount" class="text-xs text-slate-400">0 machines</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-900/60 text-slate-300 uppercase text-xs">
+                        <tr>
+                            <th class="text-left px-5 py-3">Machine</th>
+                            <th class="text-left px-5 py-3">Location</th>
+                            <th class="text-left px-5 py-3">Firmware</th>
+                            <th class="text-left px-5 py-3">Status</th>
+                        </tr>
+                        </thead>
+                        <tbody id="machineTable" class="divide-y divide-slate-800"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="rounded-2xl bg-panelSoft border border-slate-800 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">Recent Pill Records</h3>
+                    <span id="recordCount" class="text-xs text-slate-400">0 records</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-900/60 text-slate-300 uppercase text-xs">
+                        <tr>
+                            <th class="text-left px-5 py-3">Time</th>
+                            <th class="text-left px-5 py-3">Machine</th>
+                            <th class="text-left px-5 py-3">Pill</th>
+                            <th class="text-left px-5 py-3">Qty</th>
+                            <th class="text-left px-5 py-3">Mode</th>
+                        </tr>
+                        </thead>
+                        <tbody id="recordTable" class="divide-y divide-slate-800"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <p id="toast" class="hidden rounded-lg border px-4 py-3 text-sm"></p>
+        </div>
+    </main>
+</div>
+
+<script>
+    const connectionStatusEl = document.getElementById('connectionStatus');
+    const lastSyncEl = document.getElementById('lastSync');
+    const totalPillsEl = document.getElementById('totalPills');
+    const totalRecordsEl = document.getElementById('totalRecords');
+    const machinesOnlineEl = document.getElementById('machinesOnline');
+    const totalTypesEl = document.getElementById('totalTypes');
+    const machineTableEl = document.getElementById('machineTable');
+    const recordTableEl = document.getElementById('recordTable');
+    const machineCountEl = document.getElementById('machineCount');
+    const recordCountEl = document.getElementById('recordCount');
+    const pillTypeSelectEl = document.getElementById('pillTypeSelect');
+    const toastEl = document.getElementById('toast');
+
+    const pillTypeForm = document.getElementById('pillTypeForm');
+    const machineForm = document.getElementById('machineForm');
+    const recordForm = document.getElementById('recordForm');
+
+    const refreshBtn = document.getElementById('refreshBtn');
+    const heartbeatBtn = document.getElementById('heartbeatBtn');
+    const apiKeyInputEl = document.getElementById('apiKeyInput');
+    const saveApiKeyBtnEl = document.getElementById('saveApiKeyBtn');
+    const emailInputEl = document.getElementById('emailInput');
+    const codeInputEl = document.getElementById('codeInput');
+    const sendCodeBtnEl = document.getElementById('sendCodeBtn');
+    const verifyCodeBtnEl = document.getElementById('verifyCodeBtn');
+    const emailDeliveryStatusEl = document.getElementById('emailDeliveryStatus');
+    const devCodePreviewEl = document.getElementById('devCodePreview');
+    const quickLoginWrapEl = document.getElementById('quickLoginWrap');
+    const quickRoleSelectEl = document.getElementById('quickRoleSelect');
+    const quickCodeInputEl = document.getElementById('quickCodeInput');
+    const quickLoginBtnEl = document.getElementById('quickLoginBtn');
+    const quickLoginStatusEl = document.getElementById('quickLoginStatus');
+    const logoutBtnEl = document.getElementById('logoutBtn');
+    const authStatusEl = document.getElementById('authStatus');
+    const googleSignInWrapEl = document.getElementById('googleSignInWrap');
+    const googleSignInBtnEl = document.getElementById('googleSignInBtn');
+    const googleStatusEl = document.getElementById('googleStatus');
+    const appleBtnEl = document.getElementById('appleBtn');
+    const appleStatusEl = document.getElementById('appleStatus');
+    const microsoftBtnEl = document.getElementById('microsoftBtn');
+    const microsoftStatusEl = document.getElementById('microsoftStatus');
+    const authOverlayEl = document.getElementById('authOverlay');
+    const appContentEl = document.getElementById('appContent');
+
+    let machineCache = [];
+    let savedApiKey = localStorage.getItem('pillcountApiKey') || '';
+    let authToken = localStorage.getItem('pillcountAuthToken') || '';
+    let authRequired = true;
+    let googleButtonInitialized = false;
+    let appleInitialized = false;
+    let microsoftClient = null;
+    let microsoftEnabled = false;
+    let appleEnabled = false;
+    let refreshInFlight = false;
+
+    if (savedApiKey) {
+        apiKeyInputEl.value = savedApiKey;
+    }
+
+    function setAuthStatus() {
+        if (authToken) {
+            authStatusEl.textContent = 'Logged in';
+            authStatusEl.className = 'text-xs text-emerald-300';
+            return;
+        }
+        authStatusEl.textContent = 'Not logged in';
+        authStatusEl.className = 'text-xs text-slate-500';
+    }
+
+    setAuthStatus();
+
+    function toggleUiLock(locked) {
+        if (locked) {
+            authOverlayEl.classList.remove('hidden');
+            appContentEl.classList.add('pointer-events-none', 'opacity-40');
+            return;
+        }
+
+        authOverlayEl.classList.add('hidden');
+        appContentEl.classList.remove('pointer-events-none', 'opacity-40');
+    }
+
+    function isAuthLocked() {
+        return authRequired && !authToken;
+    }
+
+    function requireAuthForAction() {
+        if (!isAuthLocked()) {
+            return true;
+        }
+
+        toggleUiLock(true);
+        showToast('Please sign in first', false);
+        return false;
+    }
+
+    async function handleGoogleCredential(credentialResponse) {
+        const idToken = credentialResponse?.credential;
+        if (!idToken) {
+            showToast('Google login failed: no credential received', false);
+            return;
+        }
+
+        try {
+            const result = await api('/api/auth/google', {
+                method: 'POST',
+                body: JSON.stringify({ idToken })
+            });
+
+            authToken = result.token || '';
+            localStorage.setItem('pillcountAuthToken', authToken);
+            setAuthStatus();
+            toggleUiLock(false);
+            showToast('Google sign-in successful');
+            await refreshAll();
+        } catch (error) {
+            showToast(error.message || 'Google sign-in failed', false);
+        }
+    }
+
+    async function loginWithProvider(path, idToken, successLabel) {
+        const result = await api(path, {
+            method: 'POST',
+            body: JSON.stringify({ idToken })
+        });
+
+        authToken = result.token || '';
+        localStorage.setItem('pillcountAuthToken', authToken);
+        setAuthStatus();
+        toggleUiLock(false);
+        showToast(`${successLabel} successful`);
+        await refreshAll();
+    }
+
+    function initGoogleSignIn(clientId) {
+        if (!clientId || !window.google || googleButtonInitialized) {
+            return;
+        }
+
+        try {
+            window.google.accounts.id.initialize({
+                client_id: clientId,
+                callback: handleGoogleCredential,
+                auto_select: false,
+                cancel_on_tap_outside: true
+            });
+            googleSignInBtnEl.innerHTML = '';
+            window.google.accounts.id.renderButton(googleSignInBtnEl, {
+                theme: 'outline',
+                size: 'large',
+                shape: 'rectangular',
+                text: 'signin_with',
+                width: 230
+            });
+            googleButtonInitialized = true;
+        } catch (_error) {
+            showToast('Google sign-in could not be initialized', false);
+        }
+    }
+
+    function setButtonEnabled(buttonEl, enabled) {
+        if (enabled) {
+            buttonEl.disabled = false;
+            buttonEl.className = 'mt-2 w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg py-2 text-sm';
+            return;
+        }
+
+        buttonEl.disabled = true;
+        buttonEl.className = 'mt-2 w-full bg-slate-800/70 border border-slate-700 rounded-lg py-2 text-sm text-slate-400 cursor-not-allowed';
+    }
+
+    function initMicrosoftSignIn(clientId) {
+        if (!clientId || !window.msal || microsoftClient) {
+            return;
+        }
+
+        microsoftClient = new window.msal.PublicClientApplication({
+            auth: {
+                clientId,
+                authority: 'https://login.microsoftonline.com/common',
+                redirectUri: window.location.origin + window.location.pathname
+            },
+            cache: {
+                cacheLocation: 'localStorage'
+            }
+        });
+    }
+
+    function initAppleSignIn(clientId) {
+        if (!clientId || !window.AppleID || appleInitialized) {
+            return;
+        }
+
+        try {
+            window.AppleID.auth.init({
+                clientId,
+                scope: 'name email',
+                redirectURI: window.location.origin + window.location.pathname,
+                usePopup: true
+            });
+            appleInitialized = true;
+        } catch (_error) {
+            showToast('Apple sign-in initialization failed', false);
+        }
+    }
+
+    function showToast(message, ok = true) {
+        toastEl.textContent = message;
+        toastEl.className = ok
+            ? 'block rounded-lg border px-4 py-3 text-sm border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+            : 'block rounded-lg border px-4 py-3 text-sm border-red-500/40 bg-red-500/10 text-red-300';
+        setTimeout(() => {
+            toastEl.className = 'hidden rounded-lg border px-4 py-3 text-sm';
+        }, 3000);
+    }
+
+    function fmtDate(ts) {
+        return ts ? new Date(Number(ts)).toLocaleString() : '—';
+    }
+
+    async function api(path, options = {}) {
+        const existingHeaders = options.headers || {};
+        const headers = {
+            'Content-Type': 'application/json',
+            ...existingHeaders
+        };
+
+        if (savedApiKey) {
+            headers['x-api-key'] = savedApiKey;
+        }
+
+        if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+        }
+
+        const response = await fetch(path, {
+            headers,
+            ...options
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            if (response.status === 401) {
+                const message = String(body.error || '').toLowerCase();
+                const isApiKeyError = message.includes('api key') || message.includes('invalid api key');
+                const isLoginError = message.includes('please login') || message.includes('unauthorized') || message.includes('invalid or expired verification code');
+
+                if (isLoginError && !isApiKeyError) {
+                    authToken = '';
+                    localStorage.removeItem('pillcountAuthToken');
+                    setAuthStatus();
+                    if (authRequired) {
+                        toggleUiLock(true);
+                    }
+                    throw new Error('UNAUTHORIZED');
+                }
+
+                if (isApiKeyError) {
+                    throw new Error('API key is missing or invalid. Enter API key in sidebar.');
+                }
+            }
+            throw new Error(body.error || 'Request failed');
+        }
+        return body;
+    }
+
+    function renderMachines(rows) {
+        machineCache = rows;
+        machineCountEl.textContent = `${rows.length} machine${rows.length === 1 ? '' : 's'}`;
+
+        if (!rows.length) {
+            machineTableEl.innerHTML = '<tr><td colspan="4" class="px-5 py-6 text-slate-500">No machines registered.</td></tr>';
+            return;
+        }
+
+        machineTableEl.innerHTML = rows.map((item) => `
+            <tr class="hover:bg-slate-800/30">
+                <td class="px-5 py-3 font-medium text-slate-100">${item.machine_id}</td>
+                <td class="px-5 py-3 text-slate-300">${item.location || '—'}</td>
+                <td class="px-5 py-3 text-slate-300">${item.firmware_version || '—'}</td>
+                <td class="px-5 py-3">
+                    <span class="px-2 py-1 text-xs rounded-full ${item.status === 'online' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/15 text-red-300 border border-red-500/30'}">
+                        ${item.status}
+                    </span>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function renderRecords(rows) {
+        recordCountEl.textContent = `${rows.length} record${rows.length === 1 ? '' : 's'}`;
+        if (!rows.length) {
+            recordTableEl.innerHTML = '<tr><td colspan="5" class="px-5 py-6 text-slate-500">No pill records yet.</td></tr>';
+            return;
+        }
+
+        recordTableEl.innerHTML = rows.map((item) => `
+            <tr class="hover:bg-slate-800/30">
+                <td class="px-5 py-3 text-slate-300">${fmtDate(item.timestamp)}</td>
+                <td class="px-5 py-3 text-slate-100">${item.machineId}</td>
+                <td class="px-5 py-3 text-sky-300">${item.pillName || item.pillTypeCode}</td>
+                <td class="px-5 py-3 text-slate-100">${item.quantity}</td>
+                <td class="px-5 py-3 text-slate-300">${item.countMode}</td>
+            </tr>
+        `).join('');
+    }
+
+    function renderPillTypeOptions(types) {
+        const options = ['<option value="">Select pill type</option>'];
+        types.forEach((item) => {
+            options.push(`<option value="${item.code}">${item.code} - ${item.name}</option>`);
+        });
+        pillTypeSelectEl.innerHTML = options.join('');
+    }
+
+    async function refreshAll() {
+        if (refreshInFlight) {
+            return;
+        }
+
+        refreshInFlight = true;
+        try {
+            const healthRes = await fetch('/api/health');
+            const health = await healthRes.json();
+
+            authRequired = health?.security?.authEnabled === true;
+            const googleEnabled = health?.security?.googleAuthEnabled === true;
+            const googleClientId = health?.security?.googleClientId || '';
+            const microsoftClientId = health?.security?.microsoftClientId || '';
+            const microsoftAuthEnabled = health?.security?.microsoftAuthEnabled === true;
+            const appleClientId = health?.security?.appleClientId || '';
+            const appleAuthEnabled = health?.security?.appleAuthEnabled === true;
+            const smtpConfigured = health?.security?.smtpConfigured === true;
+            const quickLoginEnabled = health?.security?.quickLoginEnabled === true;
+            const quickRoles = health?.security?.quickLoginRoles || {};
+
+            if (smtpConfigured) {
+                emailDeliveryStatusEl.textContent = 'Email service configured. Verification code will be sent to your inbox.';
+                emailDeliveryStatusEl.className = 'text-xs text-emerald-300';
+            } else {
+                emailDeliveryStatusEl.textContent = 'SMTP not configured. You will receive a dev code in this panel/terminal only.';
+                emailDeliveryStatusEl.className = 'text-xs text-amber-300';
+            }
+
+            googleStatusEl.textContent = googleEnabled
+                ? 'Google sign-in is enabled.'
+                : 'Google sign-in is not configured. Set GOOGLE_CLIENT_ID in .env.';
+            googleStatusEl.className = googleEnabled ? 'text-xs text-emerald-300 mt-2' : 'text-xs text-slate-500 mt-2';
+
+            microsoftEnabled = microsoftAuthEnabled;
+            appleEnabled = appleAuthEnabled;
+
+            microsoftStatusEl.textContent = microsoftAuthEnabled
+                ? 'Microsoft sign-in is enabled.'
+                : 'Microsoft sign-in is not configured. Set MICROSOFT_CLIENT_ID in .env.';
+            microsoftStatusEl.className = microsoftAuthEnabled ? 'text-xs text-emerald-300' : 'text-xs text-slate-500';
+
+            appleStatusEl.textContent = appleAuthEnabled
+                ? 'Apple sign-in is enabled.'
+                : 'Apple sign-in is not configured. Set APPLE_CLIENT_ID in .env.';
+            appleStatusEl.className = appleAuthEnabled ? 'text-xs text-emerald-300' : 'text-xs text-slate-500';
+
+            setButtonEnabled(microsoftBtnEl, microsoftAuthEnabled);
+            setButtonEnabled(appleBtnEl, appleAuthEnabled);
+
+            if (googleEnabled) {
+                initGoogleSignIn(googleClientId);
+            } else {
+                googleSignInBtnEl.innerHTML = '<div class="text-xs text-slate-500">Google button unavailable</div>';
+            }
+
+            if (microsoftAuthEnabled) {
+                initMicrosoftSignIn(microsoftClientId);
+            }
+
+            if (appleAuthEnabled) {
+                initAppleSignIn(appleClientId);
+            }
+
+            quickRoleSelectEl.options[0].disabled = !Boolean(quickRoles.admin);
+            quickRoleSelectEl.options[1].disabled = !Boolean(quickRoles.developer);
+            quickRoleSelectEl.options[2].disabled = !Boolean(quickRoles.operator);
+
+            if (!quickLoginEnabled) {
+                quickLoginStatusEl.textContent = 'No quick codes configured. Set ADMIN_QUICK_CODE / DEVELOPER_QUICK_CODE / OPERATOR_QUICK_CODE in .env';
+                quickLoginStatusEl.className = 'text-xs text-amber-300';
+            } else {
+                const enabledRoles = [];
+                if (quickRoles.admin) enabledRoles.push('admin');
+                if (quickRoles.developer) enabledRoles.push('developer');
+                if (quickRoles.operator) enabledRoles.push('operator');
+                quickLoginStatusEl.textContent = `Available roles: ${enabledRoles.join(', ')}`;
+                quickLoginStatusEl.className = 'text-xs text-emerald-300';
+                if (!enabledRoles.includes(quickRoleSelectEl.value)) {
+                    quickRoleSelectEl.value = enabledRoles[0] || 'admin';
+                }
+            }
+
+            const mqttStatus = health.mqtt?.enabled
+                ? (health.mqtt?.connected ? 'MQTT Connected' : 'MQTT Disconnected')
+                : 'MQTT Disabled';
+
+            connectionStatusEl.textContent = health.ok ? `API Connected • ${mqttStatus}` : 'API Error';
+            connectionStatusEl.className = health.ok
+                ? 'mt-2 text-sm font-semibold text-success'
+                : 'mt-2 text-sm font-semibold text-danger';
+
+            lastSyncEl.textContent = `Last sync: ${new Date().toLocaleTimeString()}`;
+
+            if (authRequired && !authToken) {
+                toggleUiLock(true);
+                return;
+            }
+
+            toggleUiLock(false);
+
+            const [stats, types, machines, records] = await Promise.all([
+                api('/api/stats'),
+                api('/api/pill-types'),
+                api('/api/machines'),
+                api('/api/records?limit=30')
+            ]);
+
+            totalPillsEl.textContent = String(stats.totalPills ?? 0);
+            totalRecordsEl.textContent = String(stats.totalRecords ?? 0);
+            machinesOnlineEl.textContent = String(stats.machinesOnline ?? 0);
+            totalTypesEl.textContent = String(stats.totalTypes ?? 0);
+
+            renderPillTypeOptions(types);
+            renderMachines(machines);
+            renderRecords(records);
+        } catch (error) {
+            if (error.message === 'UNAUTHORIZED') {
+                authToken = '';
+                localStorage.removeItem('pillcountAuthToken');
+                setAuthStatus();
+                if (authRequired) {
+                    toggleUiLock(true);
+                }
+                connectionStatusEl.textContent = 'Sign in required';
+                connectionStatusEl.className = 'mt-2 text-sm font-semibold text-warning';
+                return;
+            }
+            connectionStatusEl.textContent = 'Backend unavailable';
+            connectionStatusEl.className = 'mt-2 text-sm font-semibold text-danger';
+            showToast(error.message || 'Failed to load dashboard data', false);
+        } finally {
+            refreshInFlight = false;
+        }
+    }
+
+    pillTypeForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!requireAuthForAction()) return;
+        const formData = new FormData(pillTypeForm);
+        const payload = {
+            code: formData.get('code'),
+            name: formData.get('name'),
+            dosageMg: formData.get('dosageMg') || null,
+            manufacturer: formData.get('manufacturer') || null
+        };
+        try {
+            await api('/api/pill-types', { method: 'POST', body: JSON.stringify(payload) });
+            pillTypeForm.reset();
+            showToast('Pill type created');
+            await refreshAll();
+        } catch (error) {
+            showToast(error.message, false);
+        }
+    });
+
+    machineForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!requireAuthForAction()) return;
+        const formData = new FormData(machineForm);
+        const payload = {
+            machineId: formData.get('machineId'),
+            location: formData.get('location') || null,
+            firmwareVersion: formData.get('firmwareVersion') || null
+        };
+        try {
+            await api('/api/machines/register', { method: 'POST', body: JSON.stringify(payload) });
+            showToast('Machine registered');
+            await refreshAll();
+        } catch (error) {
+            showToast(error.message, false);
+        }
+    });
+
+    heartbeatBtn.addEventListener('click', async () => {
+        if (!requireAuthForAction()) return;
+        const machineId = machineForm.querySelector('[name="machineId"]').value;
+        if (!machineId) {
+            showToast('Enter machine ID before sending heartbeat', false);
+            return;
+        }
+        try {
+            await api('/api/iot/heartbeat', {
+                method: 'POST',
+                body: JSON.stringify({ machineId, payload: { source: 'dashboard-manual' } })
+            });
+            showToast('Heartbeat sent');
+            await refreshAll();
+        } catch (error) {
+            showToast(error.message, false);
+        }
+    });
+
+    recordForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!requireAuthForAction()) return;
+        const formData = new FormData(recordForm);
+        const payload = {
+            machineId: formData.get('machineId'),
+            pillTypeCode: formData.get('pillTypeCode'),
+            quantity: Number(formData.get('quantity')),
+            countMode: formData.get('countMode'),
+            confidence: formData.get('confidence') || null,
+            status: 'normal'
+        };
+        try {
+            await api('/api/records', { method: 'POST', body: JSON.stringify(payload) });
+            recordForm.reset();
+            renderPillTypeOptions(await api('/api/pill-types'));
+            showToast('Pill count recorded');
+            await refreshAll();
+        } catch (error) {
+            showToast(error.message, false);
+        }
+    });
+
+    refreshBtn.addEventListener('click', refreshAll);
+
+    saveApiKeyBtnEl.addEventListener('click', () => {
+        savedApiKey = apiKeyInputEl.value.trim();
+        if (savedApiKey) {
+            localStorage.setItem('pillcountApiKey', savedApiKey);
+            showToast('API key saved in browser');
+        } else {
+            localStorage.removeItem('pillcountApiKey');
+            showToast('API key removed');
+        }
+    });
+
+    sendCodeBtnEl.addEventListener('click', async () => {
+        const email = emailInputEl.value.trim();
+        if (!email) {
+            showToast('Enter your email address', false);
+            return;
+        }
+
+        try {
+            const result = await api('/api/auth/request-code', {
+                method: 'POST',
+                body: JSON.stringify({ email })
+            });
+
+            if (result.delivery === 'console' && result.devCode) {
+                devCodePreviewEl.classList.remove('hidden');
+                devCodePreviewEl.textContent = `Dev verification code: ${result.devCode}`;
+                showToast(`Dev code generated: ${result.devCode}`);
+            } else if (result.delivery === 'console') {
+                showToast('Code generated (dev mode). Check backend terminal logs.');
+            } else {
+                devCodePreviewEl.classList.add('hidden');
+                showToast('Verification code sent to your email');
+            }
+        } catch (error) {
+            showToast(error.message, false);
+        }
+    });
+
+    verifyCodeBtnEl.addEventListener('click', async () => {
+        const email = emailInputEl.value.trim();
+        const code = codeInputEl.value.trim();
+
+        if (!email || !code) {
+            showToast('Enter email and verification code', false);
+            return;
+        }
+
+        try {
+            const result = await api('/api/auth/verify-code', {
+                method: 'POST',
+                body: JSON.stringify({ email, code })
+            });
+
+            authToken = result.token || '';
+            localStorage.setItem('pillcountAuthToken', authToken);
+            codeInputEl.value = '';
+            setAuthStatus();
+            toggleUiLock(false);
+            showToast('Login successful');
+            await refreshAll();
+        } catch (error) {
+            showToast(error.message, false);
+        }
+    });
+
+    quickLoginBtnEl.addEventListener('click', async () => {
+        const role = quickRoleSelectEl.value;
+        const code = quickCodeInputEl.value.trim();
+
+        if (!role || !code) {
+            showToast('Select role and enter quick login code', false);
+            return;
+        }
+
+        try {
+            const result = await api('/api/auth/quick-login', {
+                method: 'POST',
+                body: JSON.stringify({ role, code })
+            });
+
+            authToken = result.token || '';
+            localStorage.setItem('pillcountAuthToken', authToken);
+            quickCodeInputEl.value = '';
+            setAuthStatus();
+            toggleUiLock(false);
+            showToast(`Quick login successful (${role})`);
+            await refreshAll();
+        } catch (error) {
+            showToast(error.message, false);
+        }
+    });
+
+    microsoftBtnEl.addEventListener('click', async () => {
+        if (!microsoftEnabled || !microsoftClient) {
+            showToast('Microsoft sign-in is not configured', false);
+            return;
+        }
+
+        try {
+            const response = await microsoftClient.loginPopup({
+                scopes: ['openid', 'profile', 'email'],
+                prompt: 'select_account'
+            });
+
+            await loginWithProvider('/api/auth/microsoft', response.idToken, 'Microsoft sign-in');
+        } catch (error) {
+            showToast(error.message || 'Microsoft sign-in failed', false);
+        }
+    });
+
+    appleBtnEl.addEventListener('click', async () => {
+        if (!appleEnabled || !window.AppleID) {
+            showToast('Apple sign-in is not configured', false);
+            return;
+        }
+
+        try {
+            const result = await window.AppleID.auth.signIn();
+            const idToken = result?.authorization?.id_token;
+            if (!idToken) {
+                throw new Error('Apple did not return an id token');
+            }
+
+            await loginWithProvider('/api/auth/apple', idToken, 'Apple sign-in');
+        } catch (error) {
+            showToast(error.message || 'Apple sign-in failed', false);
+        }
+    });
+
+    logoutBtnEl.addEventListener('click', () => {
+        authToken = '';
+        localStorage.removeItem('pillcountAuthToken');
+        setAuthStatus();
+        if (authRequired) {
+            toggleUiLock(true);
+        }
+        showToast('Logged out');
+    });
+
+    if (authRequired && !authToken) {
+        toggleUiLock(true);
+    }
+
+    refreshAll();
+    setInterval(refreshAll, 5000);
+</script>
+</body>
+</html>

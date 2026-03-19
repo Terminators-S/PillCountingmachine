@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 42 38% 97%;
+  --foreground: 218 42% 14%;
+  --muted: 180 20% 93%;
+  --muted-foreground: 218 16% 38%;
+  --card: 0 0% 100%;
+  --card-foreground: 218 42% 14%;
+  --border: 188 22% 84%;
+  --input: 188 22% 84%;
+  --ring: 186 100% 32%;
+  --primary: 186 100% 32%;
+  --primary-foreground: 42 38% 98%;
+}
+
+.dark {
+  --background: 218 38% 9%;
+  --foreground: 42 30% 95%;
+  --muted: 216 25% 17%;
+  --muted-foreground: 204 18% 72%;
+  --card: 218 34% 12%;
+  --card-foreground: 210 40% 96%;
+  --border: 216 22% 22%;
+  --input: 216 22% 22%;
+  --ring: 186 76% 58%;
+  --primary: 186 76% 58%;
+  --primary-foreground: 216 36% 12%;
+}
+
+* {
+  @apply border-border;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: Manrope, 'Segoe UI Variable', 'Segoe UI', sans-serif;
+  background-image:
+    radial-gradient(circle at top left, rgba(13, 148, 136, 0.14), transparent 30%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(251, 248, 241, 0.98), rgba(239, 244, 247, 0.96));
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(13, 148, 136, 0.18);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.28);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.dark body {
+  background-image:
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.1), transparent 20%),
+    linear-gradient(180deg, rgba(9, 15, 25, 1), rgba(12, 20, 31, 0.98));
+}
+
+.surface-card {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(20px);
+}
+
+.surface-panel {
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px);
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.section-kicker {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(110, 231, 183, 0.95);
+  border-radius: 999px;
+  background: rgba(236, 253, 245, 0.95);
+  color: rgb(6, 95, 70);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  padding: 0.25rem 0.75rem;
+  text-transform: uppercase;
+}
+
+.scroll-table {
+  overflow: auto;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.dark .surface-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(2, 6, 23, 0.65);
+}
+
+.dark .surface-panel {
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.dark .section-kicker {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.1);
+  color: rgb(167, 243, 208);
+}
+
+.dark .scroll-table {
+  background: rgba(2, 6, 23, 0.35);
+}

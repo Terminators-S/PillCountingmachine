@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log*
+.git
+.gitignore
+.next
+apps/web/.next
+apps/web/dist
+apps/api/dist
+logs
+data
+*.local
+.env
+.env.*
+coverage

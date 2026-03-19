@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@pillcount/shared": [
+        "packages/shared/src"
+      ],
+      "@pillcount/shared/*": [
+        "packages/shared/src/*"
+      ],
+      "@pillcount/ui": [
+        "packages/ui/src"
+      ],
+      "@pillcount/ui/*": [
+        "packages/ui/src/*"
+      ]
+    }
+  }
+}

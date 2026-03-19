@@ -1,0 +1,45 @@
+{
+  "machine.register": {
+    "machineCode": "MC-01",
+    "displayName": "Main Counter 01",
+    "location": "Main Pharmacy",
+    "firmwareVersion": "1.4.2"
+  },
+  "machine.heartbeat": {
+    "machineCode": "MC-01",
+    "location": "Main Pharmacy",
+    "firmwareVersion": "1.4.2",
+    "occurredAt": "2026-03-05T09:15:00.000Z",
+    "payload": {
+      "temperatureC": 31.4,
+      "hopperLevelPct": 68,
+      "uptimeSec": 48220
+    }
+  },
+  "count.completed": {
+    "jobId": "a8f6c83f-8d6e-4418-947a-07caaec8f507",
+    "machineId": "MC-01",
+    "operatorId": "2cfe88e8-09ed-4d36-8d57-26a354106350",
+    "pillTypeId": "4f412db6-c350-49db-a3b4-ff6372ebf6a9",
+    "lotId": "34d8e5d9-f95d-4ede-b81d-d54f5f5d4237",
+    "targetQty": 120,
+    "actualQty": 119,
+    "tolerancePct": 2,
+    "evidenceLinks": [
+      "https://example.com/evidence/job-2041/front.jpg",
+      "https://example.com/evidence/job-2041/readout.png"
+    ]
+  },
+  "machine.error": {
+    "machineId": "MC-01",
+    "eventType": "machine.error",
+    "idempotencyKey": "mc01-error-20260305T091600Z-jam",
+    "occurredAt": "2026-03-05T09:16:00.000Z",
+    "payload": {
+      "code": "JAM",
+      "message": "Feeder jam detected",
+      "severity": "high",
+      "sensor": "FEEDER_2"
+    }
+  }
+}
