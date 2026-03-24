@@ -1,26 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from typing import Any
 
 import cv2
 
 from ..config import DetectorConfig, RoiConfig
 from ..overlay_ui import crop_to_roi, to_full_frame_bbox, to_full_frame_point
-
-
-@dataclass(frozen=True)
-class Detection:
-    label: str
-    confidence: float
-    bbox: tuple[int, int, int, int]
-    centroid: tuple[int, int]
-    area: float
+from .detection_types import Detection
 
 
 class ContourDetector:
     def __init__(self, config: DetectorConfig):
         self.config = config
-        self.model_name = "contour-detector-mvp"
+        self.backend_name = "contour"
+        self.model_key = "contour-detector-mvp"
+        self.model_name = "Contour detector MVP"
 
     def infer(self, frame, roi: RoiConfig) -> tuple[list[Detection], any]:
         roi_frame = crop_to_roi(frame, roi)
@@ -58,11 +52,26 @@ class ContourDetector:
                     bbox=to_full_frame_bbox(roi, local_bbox),
                     centroid=to_full_frame_point(roi, centroid_local),
                     area=area,
+                    class_id=None,
+                    source_model=self.model_key,
+                    source_backend=self.backend_name,
+                    raw_label="pill",
                 )
             )
 
         detections.sort(key=lambda item: (item.centroid[1], item.centroid[0]))
         return detections, cleaned
+
+    def describe(self) -> dict[str, Any]:
+        return {
+            "mode": "contour",
+            "backend": self.backend_name,
+            "provider": "built_in",
+            "model_key": self.model_key,
+            "model_name": self.model_name,
+            "model_path": None,
+            "catalog_path": None,
+        }
 
     @staticmethod
     def _normalized_kernel_size(value: int) -> int:

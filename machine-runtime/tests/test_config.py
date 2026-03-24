@@ -25,6 +25,9 @@ class CameraConfigTests(unittest.TestCase):
         self.assertGreater(config.roi.width, 0)
         self.assertGreater(config.roi.height, 0)
         self.assertIn(config.count_line.allowed_direction, {"up", "down", "left", "right"})
+        self.assertIn(config.detector.mode, {"contour", "ml"})
+        self.assertTrue(config.detector.model_key)
+        self.assertTrue(config.detector.model_catalog_path)
 
 
 if __name__ == "__main__":

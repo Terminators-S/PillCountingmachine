@@ -16,11 +16,34 @@ bash scripts/list_cameras.sh
 bash scripts/run_camera_capture_test.sh
 ```
 
+If you need the legacy local ML detector in the active runtime:
+
+```bash
+cd ~/pill-count-ui/machine-runtime
+bash scripts/setup_venv.sh --with-ml
+source .venv/bin/activate
+```
+
 ### Counting loop
 
 ```bash
 cd ~/pill-count-ui/machine-runtime
 bash scripts/run_machine_runtime.sh --max-frames 300
+```
+
+### ML detector comparison
+
+```bash
+cd ~/pill-count-ui/machine-runtime
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-key local-train12 --max-frames 300
+```
+
+Replay comparison:
+
+```bash
+cd ~/pill-count-ui/machine-runtime
+bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed --detector-mode contour
+bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed --detector-mode ml --detector-model-key local-train12
 ```
 
 ### Replay a saved clip

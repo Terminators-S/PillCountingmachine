@@ -24,6 +24,8 @@ Use this checklist for the first real machine-runtime milestone.
 - wrong-direction movement does not increment count
 - a counted object is not counted again on the same track
 - short-lived missed frames do not immediately break counting
+- ML mode detections show label and confidence when enabled
+- contour mode still runs cleanly as fallback
 
 ## Evidence And Results
 
@@ -33,9 +35,12 @@ Use this checklist for the first real machine-runtime milestone.
 - `events.csv` is written when crossings occur
 - debug frames are saved
 - crossing event frames are saved
+- summary notes detector mode and model used
+- counted events include object label metadata
 
 ## Replay Path
 
 - a recorded clip can be replayed with `bash scripts/run_replay_clip.sh <clip>`
 - replay mode finishes cleanly at end-of-file
 - replay mode still writes structured run outputs
+- replay comparison between contour and ML mode is straightforward

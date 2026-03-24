@@ -86,6 +86,14 @@ bash scripts/run_machine_runtime.sh --max-frames 300
 
 This is the first path to debug if anything is failing. Do not start from the dashboard or backend.
 
+If you want to validate the integrated legacy local detector inside the active runtime:
+
+```bash
+cd ~/pill-count-ui/machine-runtime
+bash scripts/setup_venv.sh --with-ml
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-key local-train12 --max-frames 300
+```
+
 ### 2. Support API and dashboard
 
 Run this on the development machine when you need the support stack:
@@ -150,6 +158,7 @@ The older `machine-runtime-mvp/` folder remains only as a temporary breadcrumb f
 - [Raspberry Pi setup](docs/hardware/raspberry-pi-setup.md)
 - [Developer workflow](docs/workflows/developer-workflow.md)
 - [Validation checklist](docs/workflows/validation-checklist.md)
+- [ML detector integration note](docs/workflows/ml-detector-integration-note.md)
 - [MVP scope and deferred scope](docs/milestones/mvp-scope.md)
 - [Implementation roadmap](docs/milestones/implementation-roadmap.md)
 - [Next-step note](docs/milestones/next-step-note.md)

@@ -27,6 +27,7 @@ class PendingSyncPayloadTests(unittest.TestCase):
             "completed_at_utc": "2026-03-24T12:35:00+00:00",
             "total_count": 1,
             "event_count": 1,
+            "detector": {"mode": "ml", "model_key": "local-train12"},
             "roi": {"x": 0, "y": 0, "width": 100, "height": 100},
             "line": {"start": [0, 50], "end": [100, 50], "allowed_direction": "down", "orientation": "horizontal"},
             "run_directory": "runs/run_20260324_123000",
@@ -40,6 +41,11 @@ class PendingSyncPayloadTests(unittest.TestCase):
                 timestamp_utc="2026-03-24T12:34:59+00:00",
                 frame_index=30,
                 track_id=1,
+                object_label="tablet",
+                class_id=1,
+                confidence=0.94,
+                source_model="local-train12",
+                source_backend="ml",
                 previous_centroid=(10, 40),
                 current_centroid=(10, 60),
                 allowed_direction="down",
@@ -55,6 +61,8 @@ class PendingSyncPayloadTests(unittest.TestCase):
         self.assertEqual(1, payload["total_count"])
         self.assertEqual(1, len(payload["events"]))
         self.assertEqual([10, 40], payload["events"][0]["previous_centroid"])
+        self.assertEqual("tablet", payload["events"][0]["object_label"])
+        self.assertEqual("ml", payload["detector"]["mode"])
 
 
 if __name__ == "__main__":

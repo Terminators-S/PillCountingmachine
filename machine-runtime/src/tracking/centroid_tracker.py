@@ -14,6 +14,10 @@ class TrackedObject:
     bbox: tuple[int, int, int, int]
     centroid: tuple[int, int]
     area: float
+    confidence: float = 1.0
+    class_id: int | None = None
+    source_model: str = ""
+    source_backend: str = ""
     centroid_history: list[tuple[int, int]] = field(default_factory=list)
     frames_seen: int = 1
     missing_frames: int = 0
@@ -51,6 +55,11 @@ class CentroidTracker:
             track.bbox = detection.bbox
             track.centroid = detection.centroid
             track.area = detection.area
+            track.label = detection.label
+            track.confidence = detection.confidence
+            track.class_id = detection.class_id
+            track.source_model = detection.source_model
+            track.source_backend = detection.source_backend
             track.frames_seen += 1
             track.missing_frames = 0
             track.last_frame_index = frame_index
@@ -72,6 +81,10 @@ class CentroidTracker:
                 bbox=detection.bbox,
                 centroid=detection.centroid,
                 area=detection.area,
+                confidence=detection.confidence,
+                class_id=detection.class_id,
+                source_model=detection.source_model,
+                source_backend=detection.source_backend,
                 centroid_history=[detection.centroid],
                 frames_seen=1,
                 missing_frames=0,

@@ -14,6 +14,11 @@ class CrossingEvent:
     timestamp_utc: str
     frame_index: int
     track_id: int
+    object_label: str
+    class_id: int | None
+    confidence: float
+    source_model: str
+    source_backend: str
     previous_centroid: tuple[int, int]
     current_centroid: tuple[int, int]
     allowed_direction: str
@@ -52,6 +57,11 @@ class LineCounter:
                 timestamp_utc=datetime.now(timezone.utc).isoformat(),
                 frame_index=frame_index,
                 track_id=track.track_id,
+                object_label=track.label,
+                class_id=track.class_id,
+                confidence=track.confidence,
+                source_model=track.source_model,
+                source_backend=track.source_backend,
                 previous_centroid=previous_centroid,
                 current_centroid=current_centroid,
                 allowed_direction=self.count_line.allowed_direction,

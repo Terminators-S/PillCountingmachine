@@ -51,6 +51,13 @@ class CountLineConfig:
 @dataclass(frozen=True)
 class DetectorConfig:
     mode: str = "contour"
+    confidence_threshold: float = 0.25
+    nms_iou_threshold: float = 0.45
+    inference_size: int = 640
+    device: str = "cpu"
+    model_key: str = "local-train12"
+    model_catalog_path: str = "../legacy/old-machine-runtime/machine-learning/model_catalog.json"
+    model_path: str | None = None
     threshold_type: str = "binary_inverse"
     binary_threshold: int = 145
     blur_kernel_size: int = 5

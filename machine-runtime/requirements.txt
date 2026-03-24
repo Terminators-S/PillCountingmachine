@@ -1,3 +1,2 @@
-# Keep the first MVP Python environment simple and reliable.
+# Base Python requirements for contour-mode machine runtime.
 # OpenCV is installed from the Raspberry Pi OS package manager via scripts/pi_setup.sh.
-

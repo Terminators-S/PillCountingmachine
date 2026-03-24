@@ -18,6 +18,10 @@ def build_track(track_id: int, history: list[tuple[int, int]]) -> TrackedObject:
         bbox=(0, 0, 10, 10),
         centroid=history[-1],
         area=100.0,
+        confidence=0.92,
+        class_id=0,
+        source_model="local-train12",
+        source_backend="ml",
         centroid_history=history,
         frames_seen=len(history),
         missing_frames=0,
@@ -37,6 +41,8 @@ class LineCounterTests(unittest.TestCase):
         self.assertEqual(1, self.line_counter.total_count)
         self.assertEqual(1, len(events))
         self.assertEqual({1}, self.line_counter.counted_track_ids)
+        self.assertEqual("pill", events[0].object_label)
+        self.assertEqual("local-train12", events[0].source_model)
 
     def test_wrong_direction_is_not_counted(self):
         track = build_track(2, [(100, 180), (100, 120)])

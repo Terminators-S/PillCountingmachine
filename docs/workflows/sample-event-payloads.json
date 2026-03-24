@@ -30,6 +30,34 @@
       "https://example.com/evidence/job-2041/readout.png"
     ]
   },
+  "machine.pending_sync": {
+    "schema_version": 1,
+    "status": "pending_sync",
+    "machine_name": "pill-counter-pi",
+    "run_id": "run_20260324_144500",
+    "source_mode": "replay",
+    "source_label": "datasets/test-clips/example.mp4",
+    "started_at_utc": "2026-03-24T07:45:00.000Z",
+    "completed_at_utc": "2026-03-24T07:45:18.000Z",
+    "total_count": 12,
+    "event_count": 12,
+    "detector": {
+      "mode": "ml",
+      "backend": "ml",
+      "model_key": "local-train12",
+      "model_name": "Local train12 best"
+    },
+    "events": [
+      {
+        "event_type": "counted_crossing",
+        "frame_index": 214,
+        "track_id": 7,
+        "object_label": "tablet",
+        "confidence": 0.94,
+        "source_model": "local-train12"
+      }
+    ]
+  },
   "machine.error": {
     "machineId": "MC-01",
     "eventType": "machine.error",

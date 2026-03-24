@@ -62,8 +62,19 @@ Opens the USB camera, warms it up, reads stable frames, and writes a debug captu
 ### Inference
 
 - `src/inference/contour_detector.py`
+- `src/inference/ml_detector.py`
 
-Uses a simple contour detector inside the ROI. This is intentional for the first MVP because the physical setup matters more than large-model complexity.
+Two detector backends are now available:
+
+- `contour`
+  - built-in fallback for quick bench debugging
+  - zero extra ML dependency beyond OpenCV
+- `ml`
+  - reuses the legacy local trained `.pt` models from `legacy/old-machine-runtime/machine-learning/`
+  - first integration target is `local-train12`
+  - loaded with Ultralytics YOLO inside the active runtime
+
+The active machine runtime remains canonical. Only the trained model assets and the model-catalog format were reused from legacy.
 
 ### Tracking
 
@@ -125,6 +136,17 @@ source .venv/bin/activate
 
 The venv uses `--system-site-packages` so the Pi can reuse the apt-installed OpenCV package.
 
+### 2a. Install optional ML detector dependencies
+
+Only required when you want `detector.mode=ml`:
+
+```bash
+bash scripts/setup_venv.sh --with-ml
+source .venv/bin/activate
+```
+
+This installs `ultralytics` into the venv while keeping the contour-only path lightweight.
+
 ### 3. Detect the camera
 
 ```bash
@@ -161,6 +183,28 @@ Compatibility alias:
 
 ```bash
 bash scripts/run_counting_mvp.sh --max-frames 300
+```
+
+### 5a. Run with the ML detector
+
+Use the legacy local model inside the active runtime:
+
+```bash
+bash scripts/setup_venv.sh --with-ml
+source .venv/bin/activate
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-key local-train12 --max-frames 300
+```
+
+Replay comparison example:
+
+```bash
+bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed --detector-mode ml --detector-model-key local-train12
+```
+
+Contour comparison example:
+
+```bash
+bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed --detector-mode contour
 ```
 
 ### 6. Replay a saved test clip
@@ -200,6 +244,8 @@ The runtime milestone is only valid when all of these are true:
 - the ROI fits the physical lane
 - the count line is visible and placed correctly
 - one real crossing increments the count exactly once
+- detector mode and selected model are recorded in `summary.json`
+- ML mode shows label and confidence on detections when enabled
 - debug frames and event evidence are saved locally
 
 ## Local Test Command
@@ -230,14 +276,23 @@ Per run, inspect:
 
 These files are the primary debugging evidence for the MVP.
 
+When ML mode is active, the event and summary files also include:
+
+- detector backend and model metadata
+- counted object labels
+- counted event confidence and source model fields
+
 ## Validation And Next Step
 
 - Acceptance checklist: [`../docs/workflows/validation-checklist.md`](../docs/workflows/validation-checklist.md)
 - Next-step note: [`../docs/milestones/next-step-note.md`](../docs/milestones/next-step-note.md)
+- ML integration note: [`../docs/workflows/ml-detector-integration-note.md`](../docs/workflows/ml-detector-integration-note.md)
 
 ## Known Limitations
 
-- the detector is still a constrained contour-based MVP, not a trained multi-class model
+- ML mode currently supports only local legacy `.pt` models, not the old ensemble or hosted Roboflow paths
+- the first integrated ML target is `local-train12`; `local-train10` and `local-train7` remain available for manual comparison
+- Ultralytics `.pt` inference is acceptable for MVP validation on Raspberry Pi 5, but ONNX export is the next optimization if CPU performance becomes the bottleneck
 - the runtime assumes one stable lane and one dominant direction of motion
 - replay mode is intended for debugging, not for benchmarking real-time camera behavior
 - backend sync is intentionally stubbed as `pending_sync.json` for now

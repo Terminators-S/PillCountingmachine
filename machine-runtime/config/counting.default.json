@@ -12,6 +12,13 @@
   },
   "detector": {
     "mode": "contour",
+    "confidence_threshold": 0.25,
+    "nms_iou_threshold": 0.45,
+    "inference_size": 640,
+    "device": "cpu",
+    "model_key": "local-train12",
+    "model_catalog_path": "../legacy/old-machine-runtime/machine-learning/model_catalog.json",
+    "model_path": null,
     "threshold_type": "binary_inverse",
     "binary_threshold": 145,
     "blur_kernel_size": 5,

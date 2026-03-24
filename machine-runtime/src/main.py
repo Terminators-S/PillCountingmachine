@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import time
+from collections import Counter
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,9 +20,9 @@ from .capture import (
     read_frame_with_timeout,
     warmup_camera,
 )
-from .config import CameraRuntimeConfig, load_camera_config, load_counting_config, project_root
+from .config import CameraRuntimeConfig, CountingRuntimeConfig, DetectorConfig, load_camera_config, load_counting_config, project_root
 from .counting import LineCounter
-from .inference import ContourDetector
+from .inference import build_detector
 from .overlay_ui import (
     absolute_line_points,
     close_preview_window,
@@ -46,6 +47,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-preview", action="store_true", help="Disable the preview window.")
     parser.add_argument("--fullscreen", action="store_true", help="Force fullscreen preview mode.")
     parser.add_argument("--windowed", action="store_true", help="Force windowed preview mode.")
+    parser.add_argument("--detector-mode", choices=["contour", "ml"], default=None, help="Override detector mode.")
+    parser.add_argument("--detector-model-key", default=None, help="Override the ML model key.")
+    parser.add_argument("--detector-model-path", default=None, help="Override the ML model file path.")
+    parser.add_argument("--detector-catalog-path", default=None, help="Override the legacy ML model catalog path.")
     return parser.parse_args()
 
 
@@ -71,9 +76,12 @@ def draw_detections(frame, detections) -> None:
     for detection in detections:
         x1, y1, x2, y2 = detection.bbox
         cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 215, 0), 2)
+        label_text = f"{detection.label} {detection.confidence:.2f}"
+        if detection.source_backend == "contour":
+            label_text = f"{detection.label} area={int(detection.area)}"
         cv2.putText(
             frame,
-            f"{detection.label} area={int(detection.area)}",
+            label_text,
             (x1, max(20, y1 - 8)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
@@ -88,7 +96,7 @@ def draw_tracks(frame, tracks: list[TrackedObject], counted_track_ids: set[int])
         cv2.circle(frame, track.centroid, 4, color, -1)
         cv2.putText(
             frame,
-            f"ID {track.track_id}",
+            f"ID {track.track_id} {track.label}",
             (track.centroid[0] + 8, max(20, track.centroid[1] - 8)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.55,
@@ -140,7 +148,7 @@ def build_session_metadata(
     camera_config,
     counting_config,
     line_points,
-    detector_name: str,
+    detector_info: dict[str, object],
     source_mode: str,
     source_label: str,
 ) -> dict[str, object]:
@@ -165,11 +173,7 @@ def build_session_metadata(
             "allowed_direction": counting_config.count_line.allowed_direction,
             "orientation": counting_config.count_line.orientation,
         },
-        "detector": {
-            "model_used": detector_name,
-            "confidence_threshold": None,
-            **asdict(counting_config.detector),
-        },
+        "detector": {**asdict(counting_config.detector), **detector_info},
         "tracker": asdict(counting_config.tracker),
         "recording": asdict(counting_config.recording),
     }
@@ -182,7 +186,7 @@ def build_final_summary(
     machine_name: str,
     counting_config,
     line_points,
-    detector_name: str,
+    detector_info: dict[str, object],
     line_counter: LineCounter,
     frame_index: int,
     average_fps: float,
@@ -194,6 +198,7 @@ def build_final_summary(
     camera_state: str,
     status_text: str,
 ) -> dict[str, object]:
+    counted_by_label = Counter(event.object_label for event in line_counter.events)
     return {
         "run_id": run_id,
         "timestamp_utc": started_at_utc,
@@ -215,9 +220,9 @@ def build_final_summary(
             "allowed_direction": counting_config.count_line.allowed_direction,
             "orientation": counting_config.count_line.orientation,
         },
-        "model_used": detector_name,
-        "confidence_threshold": None,
-        "binary_threshold": counting_config.detector.binary_threshold,
+        "model_used": detector_info.get("model_name") or detector_info.get("model_key"),
+        "detector": {**asdict(counting_config.detector), **detector_info},
+        "counted_by_label": dict(counted_by_label),
         "total_count": line_counter.total_count,
         "counted_track_ids": sorted(line_counter.counted_track_ids),
         "duration_seconds": round(duration_seconds, 3),
@@ -230,10 +235,30 @@ def build_final_summary(
     }
 
 
+def override_counting_config(counting_config: CountingRuntimeConfig, args: argparse.Namespace) -> CountingRuntimeConfig:
+    detector_config = {**asdict(counting_config.detector)}
+    if args.detector_mode:
+        detector_config["mode"] = args.detector_mode
+    if args.detector_model_key:
+        detector_config["model_key"] = args.detector_model_key
+    if args.detector_model_path:
+        detector_config["model_path"] = args.detector_model_path
+    if args.detector_catalog_path:
+        detector_config["model_catalog_path"] = args.detector_catalog_path
+
+    return CountingRuntimeConfig(
+        roi=counting_config.roi,
+        count_line=counting_config.count_line,
+        detector=DetectorConfig(**detector_config),
+        tracker=counting_config.tracker,
+        recording=counting_config.recording,
+    )
+
+
 def run() -> int:
     args = parse_args()
     camera_config = load_camera_config(args.camera_config)
-    counting_config = load_counting_config(args.counting_config)
+    counting_config = override_counting_config(load_counting_config(args.counting_config), args)
     if args.fullscreen and args.windowed:
         print("ERROR: Use only one of --fullscreen or --windowed.")
         return 1
@@ -299,14 +324,19 @@ def run() -> int:
                 show_preview = False
 
         camera_info = collect_camera_session_info(capture, camera_config)
-        detector = ContourDetector(counting_config.detector)
+        try:
+            detector = build_detector(counting_config.detector)
+        except Exception as exc:
+            print(f"ERROR: Failed to initialize detector mode '{counting_config.detector.mode}': {exc}")
+            return 1
+        detector_info = detector.describe()
         tracker = CentroidTracker(counting_config.tracker)
         line_counter = LineCounter(counting_config.roi, counting_config.count_line)
         line_points = absolute_line_points(counting_config.roi, counting_config.count_line)
 
         run_id = datetime.now().strftime("run_%Y%m%d_%H%M%S")
         session_metadata = build_session_metadata(
-            run_id, camera_info, camera_config, counting_config, line_points, detector.model_name, source_mode, source_label
+            run_id, camera_info, camera_config, counting_config, line_points, detector_info, source_mode, source_label
         )
         recorder = RunRecorder(project_root() / camera_config.run_output_dir, run_id, counting_config.recording, session_metadata)
         recorder.initialize()
@@ -424,7 +454,7 @@ def run() -> int:
             machine_name=camera_config.machine_name,
             counting_config=counting_config,
             line_points=line_points,
-            detector_name=detector.model_name,
+            detector_info=detector_info,
             line_counter=line_counter,
             frame_index=frame_index,
             average_fps=average_fps,
