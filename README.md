@@ -94,8 +94,9 @@ Recommended validation order on the Pi:
 
 1. run contour mode first as the baseline
 2. export the selected legacy local model on a stronger development machine
-3. copy the exported NCNN artifact to the Pi
-4. run ML mode against the exported artifact and compare counts and FPS against contour mode
+3. copy the exported NCNN artifact to the Pi and validate that path first
+4. optionally compare the exported ONNX path after NCNN is stable
+5. keep raw `.pt` plus Ultralytics as a development-only path, not the recommended Pi path
 
 Recommended Pi ML path:
 
@@ -116,7 +117,19 @@ python -m pip install ncnn
 bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best_ncnn_model --detector-device cpu --max-frames 300
 ```
 
-Use raw `.pt` plus `ultralytics` on the Pi only for development-only checks, not as the recommended Raspberry Pi validation path.
+Optional secondary ONNX comparison on the Pi:
+
+```bash
+cd ~/PillCountingmachine/machine-runtime
+source .venv/bin/activate
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+python -m pip install onnxruntime
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best.onnx --detector-device cpu --max-frames 300
+```
+
+Use raw `.pt` plus `ultralytics` only for development-only checks on stronger machines or temporary debugging, not as the recommended Raspberry Pi validation path.
 
 For exported-model copy steps, ONNX comparison commands, and full Raspberry Pi ML instructions, use the detailed machine runtime guide:
 
