@@ -79,8 +79,12 @@ Run this on the Raspberry Pi:
 cd ~/PillCountingmachine/machine-runtime
 bash scripts/pi_setup.sh
 bash scripts/setup_venv.sh
+source .venv/bin/activate
 bash scripts/list_cameras.sh
 bash scripts/run_camera_capture_test.sh
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
 bash scripts/run_machine_runtime.sh --max-frames 300
 ```
 
@@ -99,13 +103,24 @@ Recommended Pi ML path:
 - `ONNX` is the secondary portable option
 - raw `.pt` loading on the Pi is development-only and not the recommended validation or deployment path
 
-If you want to do a quick development-only `.pt` check inside the active runtime:
+Recommended Raspberry Pi ML validation flow:
 
 ```bash
 cd ~/PillCountingmachine/machine-runtime
-bash scripts/setup_venv.sh --with-ml
-bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-key local-train12 --max-frames 300
+source .venv/bin/activate
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+bash scripts/run_machine_runtime.sh --detector-mode contour --max-frames 300
+python -m pip install ncnn
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best_ncnn_model --detector-device cpu --max-frames 300
 ```
+
+Use raw `.pt` plus `ultralytics` on the Pi only for development-only checks, not as the recommended Raspberry Pi validation path.
+
+For exported-model copy steps, ONNX comparison commands, and full Raspberry Pi ML instructions, use the detailed machine runtime guide:
+
+- [machine-runtime/README.md](machine-runtime/README.md)
 
 ### 2. Support API and dashboard
 
