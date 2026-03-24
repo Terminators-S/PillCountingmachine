@@ -73,6 +73,7 @@ Two detector backends are now available:
   - reuses the legacy local trained `.pt` models from `legacy/old-machine-runtime/machine-learning/`
   - first integration target is `local-train12`
   - loaded with Ultralytics YOLO inside the active runtime
+  - also supports exported `.onnx` files and NCNN model directories through `--detector-model-path`
 
 The active machine runtime remains canonical. Only the trained model assets and the model-catalog format were reused from legacy.
 
@@ -147,6 +148,18 @@ source .venv/bin/activate
 
 This installs `ultralytics` into the venv while keeping the contour-only path lightweight.
 
+If you want to run exported ONNX models, also install:
+
+```bash
+python -m pip install onnxruntime
+```
+
+If you want to run exported NCNN models, also install:
+
+```bash
+python -m pip install ncnn
+```
+
 ### 3. Detect the camera
 
 ```bash
@@ -199,6 +212,34 @@ Replay comparison example:
 
 ```bash
 bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed --detector-mode ml --detector-model-key local-train12
+```
+
+### 5b. Export a local model to ONNX or NCNN for Raspberry Pi
+
+Export from the repo copy on your development machine:
+
+```bash
+cd ~/pill-count-ui/machine-runtime
+source .venv/bin/activate
+python scripts/export_ml_model.py --model-key local-train12 --imgsz 640
+```
+
+Run the active runtime with an exported ONNX model:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path ../legacy/old-machine-runtime/machine-learning/models/local/train12/best.onnx --max-frames 300
+```
+
+Run the active runtime with an exported NCNN model directory on the Pi CPU:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path ../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model --detector-device cpu --max-frames 300
+```
+
+If your Pi image and graphics stack support Vulkan through NCNN, you can try:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path ../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model --detector-device vulkan:0 --max-frames 300
 ```
 
 Contour comparison example:
@@ -292,7 +333,7 @@ When ML mode is active, the event and summary files also include:
 
 - ML mode currently supports only local legacy `.pt` models, not the old ensemble or hosted Roboflow paths
 - the first integrated ML target is `local-train12`; `local-train10` and `local-train7` remain available for manual comparison
-- Ultralytics `.pt` inference is acceptable for MVP validation on Raspberry Pi 5, but ONNX export is the next optimization if CPU performance becomes the bottleneck
+- exported ONNX and NCNN runtime paths are now available, but only `.pt` checkpoints remain in Git; generated exports stay local and should be copied onto the Pi as deployment artifacts
 - the runtime assumes one stable lane and one dominant direction of motion
 - replay mode is intended for debugging, not for benchmarking real-time camera behavior
 - backend sync is intentionally stubbed as `pending_sync.json` for now

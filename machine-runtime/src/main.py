@@ -49,8 +49,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--windowed", action="store_true", help="Force windowed preview mode.")
     parser.add_argument("--detector-mode", choices=["contour", "ml"], default=None, help="Override detector mode.")
     parser.add_argument("--detector-model-key", default=None, help="Override the ML model key.")
-    parser.add_argument("--detector-model-path", default=None, help="Override the ML model file path.")
+    parser.add_argument(
+        "--detector-model-path",
+        default=None,
+        help="Override the ML model path. Supports .pt, .onnx, or an exported NCNN model directory.",
+    )
     parser.add_argument("--detector-catalog-path", default=None, help="Override the legacy ML model catalog path.")
+    parser.add_argument("--detector-device", default=None, help="Override detector device, for example cpu or vulkan:0.")
+    parser.add_argument("--detector-inference-size", type=int, default=None, help="Override detector inference image size.")
     return parser.parse_args()
 
 
@@ -245,6 +251,10 @@ def override_counting_config(counting_config: CountingRuntimeConfig, args: argpa
         detector_config["model_path"] = args.detector_model_path
     if args.detector_catalog_path:
         detector_config["model_catalog_path"] = args.detector_catalog_path
+    if args.detector_device:
+        detector_config["device"] = args.detector_device
+    if args.detector_inference_size:
+        detector_config["inference_size"] = args.detector_inference_size
 
     return CountingRuntimeConfig(
         roi=counting_config.roi,

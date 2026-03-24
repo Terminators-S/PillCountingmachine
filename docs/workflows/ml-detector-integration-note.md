@@ -35,8 +35,18 @@ Reason:
 
 - ensemble execution in the active runtime
 - hosted/on-device Roboflow backends inside `machine-runtime`
-- ONNX/TensorRT-style optimization
+- TensorRT-style optimization and any broader accelerator-specific packaging beyond the new ONNX and NCNN export path
 - changes to dashboard/backend architecture
+
+## Raspberry Pi Export Path
+
+The active runtime can now run:
+
+- legacy local `.pt` checkpoints
+- exported `.onnx` files
+- exported NCNN model directories
+
+Those exports are generated outside the canonical runtime flow and remain deployment artifacts, not committed model assets.
 
 ## Immediate Validation Step
 

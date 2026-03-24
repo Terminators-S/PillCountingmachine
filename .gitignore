@@ -49,3 +49,7 @@ tmp_login.json
 
 # Machine learning runtime cache
 legacy/old-machine-runtime/machine-learning/runtime_catalog.generated.json
+legacy/old-machine-runtime/machine-learning/models/**/*.onnx
+legacy/old-machine-runtime/machine-learning/models/**/*_ncnn_model/
+machine-runtime/models/**/*.onnx
+machine-runtime/models/**/*_ncnn_model/

@@ -44,6 +44,18 @@ bash scripts/setup_venv.sh
 source .venv/bin/activate
 ```
 
+If you plan to run exported ONNX models:
+
+```bash
+python -m pip install onnxruntime
+```
+
+If you plan to run exported NCNN models:
+
+```bash
+python -m pip install ncnn
+```
+
 ## Camera Detection
 
 ```bash
@@ -74,6 +86,28 @@ If you are headless:
 
 ```bash
 bash scripts/run_machine_runtime.sh --no-preview --max-frames 300
+```
+
+## Optional ML Runtime Paths
+
+Use the legacy local `.pt` detector inside the active runtime:
+
+```bash
+bash scripts/setup_venv.sh --with-ml
+source .venv/bin/activate
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-key local-train12 --max-frames 300
+```
+
+Use an exported ONNX detector:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path ../legacy/old-machine-runtime/machine-learning/models/local/train12/best.onnx --max-frames 300
+```
+
+Use an exported NCNN detector:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path ../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model --detector-device cpu --max-frames 300
 ```
 
 ## Physical Bench Guidance

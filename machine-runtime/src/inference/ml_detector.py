@@ -26,6 +26,28 @@ def resolve_override_model_path(model_path: str) -> Path:
     return candidate
 
 
+def detect_model_format(model_path: Path) -> str:
+    if model_path.is_dir():
+        if (model_path / "model.ncnn.param").exists() and (model_path / "model.ncnn.bin").exists():
+            return "ncnn"
+        return "directory"
+
+    suffix = model_path.suffix.lower()
+    if suffix == ".pt":
+        return "pytorch"
+    if suffix == ".onnx":
+        return "onnx"
+    if suffix == ".engine":
+        return "tensorrt"
+    if suffix == ".torchscript":
+        return "torchscript"
+    if suffix == ".tflite":
+        return "tflite"
+    if suffix:
+        return suffix.lstrip(".")
+    return "unknown"
+
+
 def resolve_legacy_model_entry(config: DetectorConfig) -> dict[str, Any]:
     catalog_path = resolve_legacy_catalog_path(config.model_catalog_path)
     if config.model_path:
@@ -68,6 +90,7 @@ class MlDetector:
         self.model_name = str(self.model_entry.get("name") or self.model_key)
         self.model_provider = str(self.model_entry.get("provider") or "local")
         self.model_path = self._resolve_model_path()
+        self.model_format = detect_model_format(self.model_path)
         self.model = self._load_model()
         self.class_names = self.model.names
 
@@ -136,6 +159,7 @@ class MlDetector:
             "model_key": self.model_key,
             "model_name": self.model_name,
             "model_path": str(self.model_path),
+            "model_format": self.model_format,
             "catalog_path": str(self.catalog_path),
         }
 
