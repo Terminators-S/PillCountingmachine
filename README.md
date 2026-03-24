@@ -90,7 +90,7 @@ bash scripts/run_machine_runtime.sh --max-frames 300
 
 This is the first path to debug if anything is failing. Do not start from the dashboard or backend.
 
-Recommended validation order on the Pi:
+Recommended Pi validation order:
 
 1. run contour mode first as the baseline
 2. export the selected legacy local model on a stronger development machine
@@ -98,13 +98,13 @@ Recommended validation order on the Pi:
 4. optionally compare the exported ONNX path after NCNN is stable
 5. keep raw `.pt` plus Ultralytics as a development-only path, not the recommended Pi path
 
-Recommended Pi ML path:
+Recommended Pi ML deployment path:
 
 - `NCNN` is the first-choice deployment format for Raspberry Pi
 - `ONNX` is the secondary portable option
 - raw `.pt` loading on the Pi is development-only and not the recommended validation or deployment path
 
-Recommended Raspberry Pi ML validation flow:
+Contour baseline then exported NCNN on the Pi:
 
 ```bash
 cd ~/PillCountingmachine/machine-runtime
@@ -131,7 +131,7 @@ bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path mod
 
 Use raw `.pt` plus `ultralytics` only for development-only checks on stronger machines or temporary debugging, not as the recommended Raspberry Pi validation path.
 
-For exported-model copy steps, ONNX comparison commands, and full Raspberry Pi ML instructions, use the detailed machine runtime guide:
+For exported-model copy steps, detector backend details, ONNX comparison commands, and full Raspberry Pi ML instructions, use the detailed machine runtime guide:
 
 - [machine-runtime/README.md](machine-runtime/README.md)
 
