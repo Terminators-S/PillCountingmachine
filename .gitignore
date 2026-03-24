@@ -48,4 +48,4 @@ tmp_login.json
 *.db-wal
 
 # Machine learning runtime cache
-machine-learning/runtime_catalog.generated.json
+legacy/old-machine-runtime/machine-learning/runtime_catalog.generated.json

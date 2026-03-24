@@ -1,0 +1,3 @@
+# Keep the first MVP Python environment simple and reliable.
+# OpenCV is installed from the Raspberry Pi OS package manager via scripts/pi_setup.sh.
+

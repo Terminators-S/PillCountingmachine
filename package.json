@@ -1,5 +1,5 @@
 {
-  "name": "pillcount-enterprise-platform",
+  "name": "pillcount-machine-mvp",
   "version": "1.0.0",
   "private": true,
   "workspaces": [
@@ -8,11 +8,14 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev -w @pillcount/api\" \"npm run dev -w @pillcount/web\" \"npm run db:watch\"",
+    "dev:support": "concurrently \"npm run dev -w @pillcount/api\" \"npm run dev -w @pillcount/web\"",
     "dev:api": "npm run dev -w @pillcount/api",
     "dev:web": "npm run dev -w @pillcount/web",
     "dev:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\start-local.ps1",
     "dev:machine": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\start-live-machine.ps1",
     "dev:machine:public": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\start-live-machine-public.ps1",
+    "check:machine-runtime": "python -m compileall machine-runtime/src machine-runtime/tests && python -m unittest discover -s machine-runtime/tests -p \"test_*.py\"",
+    "test:machine-runtime": "python -m unittest discover -s machine-runtime/tests -p \"test_*.py\"",
     "build:web:firebase": "node scripts/build-firebase-web.mjs",
     "deploy:web:firebase": "npm run build:web:firebase && npx firebase-tools deploy --only hosting",
     "db:apply": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\apply-live-sql.ps1",

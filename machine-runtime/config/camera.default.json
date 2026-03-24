@@ -1,0 +1,13 @@
+{
+  "camera_index": 0,
+  "frame_width": 1280,
+  "frame_height": 720,
+  "fps": 30,
+  "warmup_frames": 20,
+  "capture_timeout_seconds": 10,
+  "preview_seconds": 5,
+  "save_preview_frame": true,
+  "capture_dir": "logs/captures",
+  "run_log_dir": "logs/runs",
+  "run_output_dir": "runs"
+}
