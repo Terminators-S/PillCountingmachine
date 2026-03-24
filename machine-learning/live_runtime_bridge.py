@@ -201,7 +201,7 @@ class RoboflowHostedRunner:
 
 
 class RoboflowOnDeviceRunner:
-    def __init__(self, model_entry: Dict[str, Any], confidence_threshold: float, snapshot_quality: int):
+    def __init__(self, model_entry: Dict[str, Any], confidence_threshold: float, iou_threshold: float, snapshot_quality: int):
         self.model_entry = model_entry
         self.api_key = os.getenv("ROBOFLOW_API_KEY", "").strip()
         if not self.api_key:
@@ -211,28 +211,39 @@ class RoboflowOnDeviceRunner:
         if not self.api_url:
             raise RuntimeError("A Roboflow inference server URL is required for on-device models.")
 
-        try:
-            from inference_sdk import InferenceHTTPClient
-        except ImportError as exc:
-            raise RuntimeError("inference-sdk is required for Roboflow on-device models. Install inference-sdk or inference-cli.") from exc
-
-        self.client = InferenceHTTPClient(api_url=self.api_url, api_key=self.api_key)
+        self.endpoint = f"{self.api_url.rstrip('/')}/infer/object_detection"
         self.confidence_threshold = confidence_threshold
+        self.iou_threshold = iou_threshold
         self.snapshot_quality = snapshot_quality
         self.tracker = GenericTracker()
 
     def infer(self, frame, frame_number: int) -> List[Detection]:
+        encoded_frame = encode_frame_base64(frame, quality=self.snapshot_quality, max_width=960)
+        payload = {
+            "api_key": self.api_key,
+            "model_id": self.model_entry["modelId"],
+            "image": {"type": "base64", "value": encoded_frame},
+            "confidence": round(self.confidence_threshold, 2),
+            "iou_threshold": round(self.iou_threshold, 2),
+        }
+        request = urlrequest.Request(
+            self.endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
         try:
-            payload = self.client.infer(frame, model_id=self.model_entry["modelId"])
-        except Exception:
-            ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), self.snapshot_quality])
-            if not ok:
-                raise RuntimeError("Failed to encode frame for Roboflow on-device inference.")
-            payload = self.client.infer(buffer.tobytes(), model_id=self.model_entry["modelId"])
+            with urlrequest.urlopen(request, timeout=60) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urlerror.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Roboflow on-device inference failed for {self.model_entry['modelId']}: {exc.code} {detail}") from exc
+        except urlerror.URLError as exc:
+            raise RuntimeError(f"Unable to reach Roboflow Inference Server at {self.endpoint}: {exc.reason}") from exc
 
         if isinstance(payload, list):
             payload = payload[0] if payload else {}
-
         if not isinstance(payload, dict):
             raise RuntimeError("Unexpected Roboflow on-device response format.")
 
@@ -527,7 +538,7 @@ def build_runner(
         return LocalUltralyticsRunner(model_entry, confidence_threshold, iou_threshold, inference_size)
     if provider == "roboflow":
         if model_entry.get("deploymentTarget") == "ondevice":
-            return RoboflowOnDeviceRunner(model_entry, confidence_threshold, snapshot_quality)
+            return RoboflowOnDeviceRunner(model_entry, confidence_threshold, iou_threshold, snapshot_quality)
         return RoboflowHostedRunner(model_entry, confidence_threshold, snapshot_quality)
     if provider == "ensemble":
         return EnsembleRunner(model_entry, confidence_threshold, iou_threshold, inference_size, snapshot_quality)

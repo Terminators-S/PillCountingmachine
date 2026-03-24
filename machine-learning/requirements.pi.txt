@@ -1,5 +1,5 @@
 opencv-python
 cvzone
 ultralytics
-inference-cli
-inference-sdk
+# Roboflow on-device inference runs in Docker on the Pi.
+# The Python bridge talks to the local server over HTTP, so no SDK is required here.

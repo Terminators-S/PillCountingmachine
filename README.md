@@ -464,9 +464,15 @@ For Raspberry Pi 5:
    - `Runtime Device Profile` = `Raspberry Pi 5`
    - `On-device Inference Server URL` = `http://127.0.0.1:9001`
 2. Use the built-in model `rf-pill-detection-v3-edge` or import your own Roboflow Universe model and save it with the on-device target.
-3. Start the Roboflow Inference Server on the Pi:
+3. Install Docker on the Pi and start the Roboflow Inference Server:
 
 ```bash
+sudo apt install -y docker.io
+sudo systemctl enable docker
+sudo systemctl start docker
+sudo usermod -aG docker "$USER"
+# log out and back in once after adding yourself to the docker group
+
 bash scripts/raspberry-pi/start-roboflow-inference.sh
 ```
 
@@ -475,11 +481,13 @@ bash scripts/raspberry-pi/start-roboflow-inference.sh
 - `ROBOFLOW_API_KEY`
 - `ROBOFLOW_INFERENCE_SERVER_URL=http://127.0.0.1:9001`
 - `ML_DEVICE_PROFILE=raspberry-pi-5`
-- `ML_PROJECT_PATH=/home/pi/pill-count-ui/machine-learning`
-- `ML_BRIDGE_SCRIPT_PATH=/home/pi/pill-count-ui/machine-learning/live_runtime_bridge.py`
-- `ML_MODEL_CATALOG_PATH=/home/pi/pill-count-ui/machine-learning/model_catalog.json`
+- `ML_PROJECT_PATH=/home/<your-user>/pill-count-ui/machine-learning`
+- `ML_BRIDGE_SCRIPT_PATH=/home/<your-user>/pill-count-ui/machine-learning/live_runtime_bridge.py`
+- `ML_MODEL_CATALOG_PATH=/home/<your-user>/pill-count-ui/machine-learning/model_catalog.json`
 
 The Pi device profile automatically lowers capture size, inference size, snapshot quality, and refresh frequency to fit Raspberry Pi 5 better than the desktop defaults.
+
+If the Pi is running Raspberry Pi OS `trixie` with Python 3.13, keep the Roboflow Inference Server in Docker. The Python bridge in this repository now talks to that local server over HTTP, so the Pi venv only needs the packages from `machine-learning/requirements.pi.txt`.
 
 ## In-Repo ML Runtime
 
