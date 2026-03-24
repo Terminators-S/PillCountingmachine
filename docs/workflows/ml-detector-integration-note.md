@@ -29,7 +29,7 @@ Reason:
 
 - strongest local metrics in the legacy catalog among the included offline models
 - practical local `.pt` asset already present in the repository
-- good enough for Raspberry Pi 5 MVP validation before export optimization work
+- good default source checkpoint for the first exported-model validation pass on Raspberry Pi 5
 
 ## Deferred On Purpose
 
@@ -40,11 +40,25 @@ Reason:
 
 ## Raspberry Pi Export Path
 
+Recommended order for Raspberry Pi ML validation:
+
+1. contour mode as the baseline and fallback
+2. export `local-train12` on a stronger development machine
+3. copy the exported artifact to the Pi
+4. validate NCNN first on the Pi
+5. use ONNX only as the secondary portable option
+
 The active runtime can now run:
 
 - legacy local `.pt` checkpoints
 - exported `.onnx` files
 - exported NCNN model directories
+
+Recommended path:
+
+- `NCNN` is the first-choice Raspberry Pi deployment path
+- `ONNX` is the secondary portability path
+- raw `.pt` loading on the Pi is optional and development-only
 
 Those exports are generated outside the canonical runtime flow and remain deployment artifacts, not committed model assets.
 
@@ -53,7 +67,7 @@ Those exports are generated outside the canonical runtime flow and remain deploy
 Run the same short saved clip twice on the Raspberry Pi:
 
 1. contour mode
-2. ML mode with `local-train12`
+2. ML mode with the exported NCNN artifact from `local-train12`
 
 Then compare:
 

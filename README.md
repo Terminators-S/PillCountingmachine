@@ -76,7 +76,7 @@ The detailed scope split lives in [docs/milestones/mvp-scope.md](docs/milestones
 Run this on the Raspberry Pi:
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
+cd ~/PillCountingmachine/machine-runtime
 bash scripts/pi_setup.sh
 bash scripts/setup_venv.sh
 bash scripts/list_cameras.sh
@@ -86,10 +86,23 @@ bash scripts/run_machine_runtime.sh --max-frames 300
 
 This is the first path to debug if anything is failing. Do not start from the dashboard or backend.
 
-If you want to validate the integrated legacy local detector inside the active runtime:
+Recommended validation order on the Pi:
+
+1. run contour mode first as the baseline
+2. export the selected legacy local model on a stronger development machine
+3. copy the exported NCNN artifact to the Pi
+4. run ML mode against the exported artifact and compare counts and FPS against contour mode
+
+Recommended Pi ML path:
+
+- `NCNN` is the first-choice deployment format for Raspberry Pi
+- `ONNX` is the secondary portable option
+- raw `.pt` loading on the Pi is development-only and not the recommended validation or deployment path
+
+If you want to do a quick development-only `.pt` check inside the active runtime:
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
+cd ~/PillCountingmachine/machine-runtime
 bash scripts/setup_venv.sh --with-ml
 bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-key local-train12 --max-frames 300
 ```

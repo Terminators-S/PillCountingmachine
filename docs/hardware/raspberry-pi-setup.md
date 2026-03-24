@@ -22,7 +22,7 @@
 Run on the Raspberry Pi:
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
+cd ~/PillCountingmachine/machine-runtime
 bash scripts/pi_setup.sh
 ```
 
@@ -39,10 +39,31 @@ This installs:
 ## Python Setup
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
+cd ~/PillCountingmachine/machine-runtime
 bash scripts/setup_venv.sh
 source .venv/bin/activate
 ```
+
+## Pi GUI Preview Environment
+
+If you want the preview window on the attached Pi display, export:
+
+```bash
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+```
+
+If you do not have the desktop session available, run headless with `--no-preview`.
+
+## Recommended ML Path
+
+Recommended Raspberry Pi ML deployment order:
+
+1. contour mode as the baseline and fallback
+2. exported NCNN model as the first ML path
+3. exported ONNX model as the secondary portable path
+4. raw `.pt` loading only for development and debugging
 
 If you plan to run exported ONNX models:
 
@@ -90,7 +111,16 @@ bash scripts/run_machine_runtime.sh --no-preview --max-frames 300
 
 ## Optional ML Runtime Paths
 
-Use the legacy local `.pt` detector inside the active runtime:
+Use the contour baseline first:
+
+```bash
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+bash scripts/run_machine_runtime.sh --detector-mode contour --max-frames 300
+```
+
+Use the legacy local `.pt` detector inside the active runtime only for development:
 
 ```bash
 bash scripts/setup_venv.sh --with-ml
@@ -98,17 +128,49 @@ source .venv/bin/activate
 bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-key local-train12 --max-frames 300
 ```
 
-Use an exported ONNX detector:
+Export the recommended first candidate on a stronger development machine:
 
 ```bash
-bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path ../legacy/old-machine-runtime/machine-learning/models/local/train12/best.onnx --max-frames 300
+cd ~/PillCountingmachine/machine-runtime
+source .venv/bin/activate
+python scripts/export_ml_model.py --model-key local-train12 --formats ncnn onnx --imgsz 640
 ```
 
-Use an exported NCNN detector:
+Copy the preferred NCNN artifact to the Pi:
 
 ```bash
-bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path ../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model --detector-device cpu --max-frames 300
+scp -r ../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model pi@raspberrypi:~/PillCountingmachine/machine-runtime/models/
+scp ../legacy/old-machine-runtime/machine-learning/models/local/train12/best.onnx pi@raspberrypi:~/PillCountingmachine/machine-runtime/models/
 ```
+
+Use the recommended exported NCNN detector:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best_ncnn_model --detector-device cpu --max-frames 300
+```
+
+Use an exported ONNX detector only when you want the secondary portable path:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best.onnx --max-frames 300
+```
+
+If NCNN Vulkan is available on the Pi, try:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best_ncnn_model --detector-device vulkan:0 --max-frames 300
+```
+
+## Pi ML Validation Checklist
+
+- preview opens on the Pi display
+- contour mode still works as fallback
+- the exported model loads successfully
+- detections appear in the ROI
+- line crossing increments count correctly
+- `summary.json` records detector backend and model
+- debug frames and event evidence are saved
+- contour and ML runs can be compared on the same lane or replay clip
 
 ## Physical Bench Guidance
 

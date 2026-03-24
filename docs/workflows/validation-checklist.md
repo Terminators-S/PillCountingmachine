@@ -27,6 +27,17 @@ Use this checklist for the first real machine-runtime milestone.
 - ML mode detections show label and confidence when enabled
 - contour mode still runs cleanly as fallback
 
+## Pi ML Validation
+
+- contour mode is run first as the baseline
+- the Pi preview opens after exporting `DISPLAY=:0`, `XDG_RUNTIME_DIR=/run/user/1000`, and `WAYLAND_DISPLAY=wayland-0`
+- the exported NCNN model loads successfully through `--detector-model-path`
+- detections appear inside the configured ROI
+- line crossing increments count correctly in ML mode
+- `summary.json` records detector backend, model path, and model format
+- debug frames and event frames are saved for ML runs
+- contour and ML runs can be compared on the same lane or replay clip
+
 ## Evidence And Results
 
 - `session.json` is written

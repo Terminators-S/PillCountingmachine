@@ -111,6 +111,14 @@ def load_json_file(config_path: str | Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def normalize_detector_config(raw_detector: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(raw_detector)
+    catalog_path = normalized.pop("catalog_path", None)
+    if catalog_path and "model_catalog_path" not in normalized:
+        normalized["model_catalog_path"] = catalog_path
+    return normalized
+
+
 def load_camera_config(config_path: str | Path | None = None) -> CameraRuntimeConfig:
     raw_data = load_json_file(config_path or default_camera_config_path())
     return CameraRuntimeConfig(**raw_data)
@@ -125,7 +133,7 @@ def load_counting_config(config_path: str | Path | None = None) -> CountingRunti
             end=tuple(raw_data["count_line"]["end"]),
             allowed_direction=raw_data["count_line"]["allowed_direction"],
         ),
-        detector=DetectorConfig(**raw_data.get("detector", {})),
+        detector=DetectorConfig(**normalize_detector_config(raw_data.get("detector", {}))),
         tracker=TrackerConfig(**raw_data.get("tracker", {})),
         recording=RecordingConfig(**raw_data.get("recording", {})),
     )

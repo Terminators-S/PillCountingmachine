@@ -9,17 +9,33 @@ Start from the machine runtime unless the task is explicitly about the support A
 ### Raspberry Pi bring-up
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
+cd ~/PillCountingmachine/machine-runtime
 bash scripts/pi_setup.sh
 bash scripts/setup_venv.sh
 bash scripts/list_cameras.sh
 bash scripts/run_camera_capture_test.sh
 ```
 
-If you need the legacy local ML detector in the active runtime:
+If you want the preview window on the Pi display:
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+```
+
+Recommended detector validation order:
+
+1. contour baseline
+2. export `local-train12` on a stronger development machine
+3. copy exported NCNN artifact to the Pi
+4. run ML mode with the exported path
+5. compare counts, misses, double-counts, and FPS against contour mode
+
+If you need the legacy local `.pt` detector in the active runtime for development-only checks:
+
+```bash
+cd ~/PillCountingmachine/machine-runtime
 bash scripts/setup_venv.sh --with-ml
 source .venv/bin/activate
 ```
@@ -27,29 +43,32 @@ source .venv/bin/activate
 ### Counting loop
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
-bash scripts/run_machine_runtime.sh --max-frames 300
+cd ~/PillCountingmachine/machine-runtime
+bash scripts/run_machine_runtime.sh --detector-mode contour --max-frames 300
 ```
 
-### ML detector comparison
+### Exported ML detector comparison
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
-bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-key local-train12 --max-frames 300
+cd ~/PillCountingmachine/machine-runtime
+python scripts/export_ml_model.py --model-key local-train12 --formats ncnn onnx --imgsz 640
+scp -r ../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model pi@raspberrypi:~/PillCountingmachine/machine-runtime/models/
+scp ../legacy/old-machine-runtime/machine-learning/models/local/train12/best.onnx pi@raspberrypi:~/PillCountingmachine/machine-runtime/models/
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best_ncnn_model --detector-device cpu --max-frames 300
 ```
 
 Replay comparison:
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
+cd ~/PillCountingmachine/machine-runtime
 bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed --detector-mode contour
-bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed --detector-mode ml --detector-model-key local-train12
+bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed --detector-mode ml --detector-model-path models/best_ncnn_model --detector-device cpu
 ```
 
 ### Replay a saved clip
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
+cd ~/PillCountingmachine/machine-runtime
 bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed
 ```
 

@@ -1,4 +1,6 @@
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -28,6 +30,20 @@ class CameraConfigTests(unittest.TestCase):
         self.assertIn(config.detector.mode, {"contour", "ml"})
         self.assertTrue(config.detector.model_key)
         self.assertTrue(config.detector.model_catalog_path)
+
+    def test_counting_config_accepts_catalog_path_alias(self):
+        payload = {
+            "roi": {"x": 10, "y": 20, "width": 100, "height": 80},
+            "count_line": {"start": [0, 40], "end": [100, 40], "allowed_direction": "down"},
+            "detector": {"mode": "ml", "catalog_path": "../legacy/catalog.json"},
+            "tracker": {},
+            "recording": {},
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "counting.json"
+            config_path.write_text(json.dumps(payload), encoding="utf-8")
+            config = load_counting_config(config_path)
+        self.assertEqual("../legacy/catalog.json", config.detector.model_catalog_path)
 
 
 if __name__ == "__main__":

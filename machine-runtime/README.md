@@ -70,10 +70,10 @@ Two detector backends are now available:
   - built-in fallback for quick bench debugging
   - zero extra ML dependency beyond OpenCV
 - `ml`
-  - reuses the legacy local trained `.pt` models from `legacy/old-machine-runtime/machine-learning/`
-  - first integration target is `local-train12`
-  - loaded with Ultralytics YOLO inside the active runtime
-  - also supports exported `.onnx` files and NCNN model directories through `--detector-model-path`
+  - can load the legacy local `.pt` checkpoints for development and debugging
+  - can load exported `.onnx` files and NCNN model directories through `--detector-model-path`
+  - defaults to `local-train12` as the first export candidate unless you have fresher comparison data
+  - keeps the active machine-runtime in control of overlay, tracking, and counting
 
 The active machine runtime remains canonical. Only the trained model assets and the model-catalog format were reused from legacy.
 
@@ -116,7 +116,7 @@ The empty `src/sync/` and `src/utils/` packages are intentional reserved seams, 
 ### 1. Install Raspberry Pi packages
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
+cd ~/PillCountingmachine/machine-runtime
 bash scripts/pi_setup.sh
 ```
 
@@ -127,6 +127,18 @@ Verifies:
 - `v4l2-ctl`
 - `lsusb`
 - `ffmpeg`
+
+### 1a. Preview environment on the Pi desktop
+
+If you want the preview window on the attached Pi display, launch from the logged-in desktop session and export:
+
+```bash
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+```
+
+If you are validating headless over SSH, use `--no-preview` instead of trying to force the GUI path.
 
 ### 2. Create the venv
 
@@ -148,16 +160,22 @@ source .venv/bin/activate
 
 This installs `ultralytics` into the venv while keeping the contour-only path lightweight.
 
-If you want to run exported ONNX models, also install:
+Recommended Raspberry Pi ML runtime dependency order:
 
-```bash
-python -m pip install onnxruntime
-```
+1. contour-only runtime for baseline validation
+2. `ultralytics` plus `ncnn` for the preferred exported-model path
+3. `onnxruntime` only when you want the secondary ONNX path
 
 If you want to run exported NCNN models, also install:
 
 ```bash
 python -m pip install ncnn
+```
+
+If you want to run exported ONNX models, also install:
+
+```bash
+python -m pip install onnxruntime
 ```
 
 ### 3. Detect the camera
@@ -200,7 +218,7 @@ bash scripts/run_counting_mvp.sh --max-frames 300
 
 ### 5a. Run with the ML detector
 
-Use the legacy local model inside the active runtime:
+Use the legacy local checkpoint directly only for development-only checks:
 
 ```bash
 bash scripts/setup_venv.sh --with-ml
@@ -216,30 +234,65 @@ bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed --det
 
 ### 5b. Export a local model to ONNX or NCNN for Raspberry Pi
 
-Export from the repo copy on your development machine:
+Recommended validation order:
+
+1. contour baseline on the Pi
+2. export `local-train12` on a stronger development machine
+3. copy the exported artifact to the Pi
+4. run ML mode with the exported path
+5. compare counts, misses, double-counts, and FPS against the contour baseline
+
+Recommended source model for the first export pass:
+
+- `local-train12`
+- only switch to `local-train10` or `local-train7` after comparing them on the same lane or replay clip
+
+Preferred export format for Raspberry Pi:
+
+- `NCNN` first
+- `ONNX` second
+- raw `.pt` on the Pi only for debugging
+
+Export from the repo copy on a stronger development machine:
 
 ```bash
-cd ~/pill-count-ui/machine-runtime
+cd ~/PillCountingmachine/machine-runtime
 source .venv/bin/activate
-python scripts/export_ml_model.py --model-key local-train12 --imgsz 640
+python scripts/export_ml_model.py --model-key local-train12 --formats ncnn onnx --imgsz 640
 ```
 
-Run the active runtime with an exported ONNX model:
+Copy the exported artifact to the Pi:
 
 ```bash
-bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path ../legacy/old-machine-runtime/machine-learning/models/local/train12/best.onnx --max-frames 300
+scp -r ../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model pi@raspberrypi:~/PillCountingmachine/machine-runtime/models/
+scp ../legacy/old-machine-runtime/machine-learning/models/local/train12/best.onnx pi@raspberrypi:~/PillCountingmachine/machine-runtime/models/
 ```
 
-Run the active runtime with an exported NCNN model directory on the Pi CPU:
+Run the contour baseline first on the Pi:
 
 ```bash
-bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path ../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model --detector-device cpu --max-frames 300
+export DISPLAY=:0
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+bash scripts/run_machine_runtime.sh --detector-mode contour --max-frames 300
+```
+
+Run the recommended NCNN path on the Pi CPU:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best_ncnn_model --detector-device cpu --max-frames 300
 ```
 
 If your Pi image and graphics stack support Vulkan through NCNN, you can try:
 
 ```bash
-bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path ../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model --detector-device vulkan:0 --max-frames 300
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best_ncnn_model --detector-device vulkan:0 --max-frames 300
+```
+
+Run the secondary ONNX path on the Pi:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best.onnx --detector-device cpu --max-frames 300
 ```
 
 Contour comparison example:
@@ -267,6 +320,12 @@ Edit [`config/counting.default.json`](config/counting.default.json):
 - `count_line.start`
 - `count_line.end`
 - `count_line.allowed_direction`
+- `detector.mode`
+- `detector.model_key`
+- `detector.model_path`
+- `detector.model_catalog_path`
+
+`detector.model_catalog_path` is the canonical config key. `detector.catalog_path` is also accepted as a compatibility alias when you load JSON config files.
 
 Calibration workflow:
 
@@ -288,6 +347,17 @@ The runtime milestone is only valid when all of these are true:
 - detector mode and selected model are recorded in `summary.json`
 - ML mode shows label and confidence on detections when enabled
 - debug frames and event evidence are saved locally
+
+### Pi ML validation checklist
+
+- preview opens on the Pi display when the GUI environment exports are set
+- contour mode runs cleanly as the baseline
+- the exported model loads successfully through `--detector-model-path`
+- detections appear inside the ROI
+- the line-crossing count increments correctly
+- `summary.json` records detector backend and model metadata
+- debug and event evidence is saved
+- contour and ML mode can be compared on the same lane or replay clip
 
 ## Local Test Command
 
@@ -331,9 +401,10 @@ When ML mode is active, the event and summary files also include:
 
 ## Known Limitations
 
-- ML mode currently supports only local legacy `.pt` models, not the old ensemble or hosted Roboflow paths
-- the first integrated ML target is `local-train12`; `local-train10` and `local-train7` remain available for manual comparison
-- exported ONNX and NCNN runtime paths are now available, but only `.pt` checkpoints remain in Git; generated exports stay local and should be copied onto the Pi as deployment artifacts
+- ML mode supports local legacy checkpoints and exported local artifacts, but not the old ensemble or hosted Roboflow paths inside the active runtime
+- `local-train12` is still the default first export candidate; `local-train10` and `local-train7` remain available for manual comparison
+- exported ONNX and NCNN runtime paths are available, but generated exports stay local and should be copied onto the Pi as deployment artifacts
+- raw `.pt` loading on the Pi is acceptable for debugging, but exported NCNN is the recommended first validation and deployment path
 - the runtime assumes one stable lane and one dominant direction of motion
 - replay mode is intended for debugging, not for benchmarking real-time camera behavior
 - backend sync is intentionally stubbed as `pending_sync.json` for now
