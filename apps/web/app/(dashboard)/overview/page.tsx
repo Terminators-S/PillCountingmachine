@@ -3,8 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
 import { Activity, ClipboardCheck, Package2, Truck } from 'lucide-react';
+import { SectionHeader, CompactEmptyState } from '../../../components/dashboard-section';
 import { Button } from '../../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { Card, CardContent, CardHeader } from '../../../components/ui/card';
 import { PageHeader } from '../../../components/page-header';
 import { StatCard } from '../../../components/stat-card';
 import { DataTable } from '../../../components/data-table';
@@ -52,17 +53,14 @@ export default function OverviewPage() {
     queryKey: ['reports', 'overview'],
     queryFn: () => apiRequest<ReportsOverview>('/reports/overview')
   });
-
   const jobs = useQuery({
     queryKey: ['jobs', 'overview'],
     queryFn: () => apiRequest<CountingJob[]>('/jobs')
   });
-
   const machines = useQuery({
     queryKey: ['machines', 'overview'],
     queryFn: () => apiRequest<Machine[]>('/machines')
   });
-
   const events = useQuery({
     queryKey: ['events', 'overview'],
     queryFn: () => apiRequest<EventListResponse>('/machine-events?page=1&pageSize=10')
@@ -71,60 +69,64 @@ export default function OverviewPage() {
   const stats = overview.data;
 
   return (
-    <div className='space-y-6'>
+    <div className='space-y-4'>
       <PageHeader
-        title='Overview Dashboard'
-        description='Operational snapshot across fleet, counting jobs, and inventory activity.'
+        title='Overview'
+        description='Fleet, jobs, and inventory status in one compact operator view.'
         actions={
           <>
-            <Button variant='secondary' onClick={() => jobs.refetch()}>
-              Refresh now
+            <Button variant='secondary' onClick={() => Promise.all([overview.refetch(), jobs.refetch(), machines.refetch(), events.refetch()])}>
+              Refresh
             </Button>
-            <Button onClick={() => downloadFromApi('/reports/export/records.csv', 'records.csv')}>Export records CSV</Button>
+            <Button onClick={() => downloadFromApi('/reports/export/records.csv', 'records.csv')}>Export CSV</Button>
           </>
         }
       />
 
-      <section className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
+      <section className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
         <StatCard label='Machines Online' value={formatNumber(stats?.machinesOnline || 0)} hint={`${formatNumber(stats?.machinesTotal || 0)} total`} icon={<Truck className='h-4 w-4 text-muted-foreground' />} />
-        <StatCard label='Jobs Completed' value={formatNumber(stats?.jobsCompleted || 0)} hint={`${formatNumber(stats?.jobsTotal || 0)} total jobs`} icon={<ClipboardCheck className='h-4 w-4 text-muted-foreground' />} />
-        <StatCard label='Pill Types' value={formatNumber(stats?.pillsTotal || 0)} hint='Configured product catalog' icon={<Package2 className='h-4 w-4 text-muted-foreground' />} />
-        <StatCard label='Inventory Movements' value={formatNumber(stats?.inventoryMovements || 0)} hint='Ledger rows (append-only)' icon={<Activity className='h-4 w-4 text-muted-foreground' />} />
+        <StatCard label='Jobs Completed' value={formatNumber(stats?.jobsCompleted || 0)} hint={`${formatNumber(stats?.jobsTotal || 0)} total`} icon={<ClipboardCheck className='h-4 w-4 text-muted-foreground' />} />
+        <StatCard label='Pill Types' value={formatNumber(stats?.pillsTotal || 0)} hint='Catalog entries' icon={<Package2 className='h-4 w-4 text-muted-foreground' />} />
+        <StatCard label='Inventory Moves' value={formatNumber(stats?.inventoryMovements || 0)} hint='Ledger activity' icon={<Activity className='h-4 w-4 text-muted-foreground' />} />
       </section>
 
-      <section className='grid gap-6 xl:grid-cols-3'>
-        <Card className='xl:col-span-2'>
+      <section className='grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_320px]'>
+        <Card>
           <CardHeader>
-            <CardTitle>Latest Jobs</CardTitle>
+            <SectionHeader title='Latest jobs' description='Operational work queue and recent runs.' />
           </CardHeader>
           <CardContent>
-            {jobs.isLoading ? <div className='text-sm text-muted-foreground'>Loading jobs...</div> : null}
-            {jobs.error ? <div className='text-sm text-red-600'>Failed to load jobs.</div> : null}
-            {jobs.data ? <DataTable columns={jobColumns} data={jobs.data.slice(0, 20)} searchPlaceholder='Search jobs...' /> : null}
+            {jobs.isLoading ? <p className='text-sm text-muted-foreground'>Loading jobs...</p> : null}
+            {jobs.error ? <p className='text-sm text-red-600'>Failed to load jobs.</p> : null}
+            {jobs.data ? (
+              <DataTable columns={jobColumns} data={jobs.data.slice(0, 12)} searchPlaceholder='Search jobs...' emptyText='No jobs available yet.' />
+            ) : null}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Recent Machine Events</CardTitle>
+            <SectionHeader title='Recent machine events' description='Latest status changes and machine activity.' />
           </CardHeader>
-          <CardContent className='space-y-3'>
+          <CardContent className='space-y-2'>
             {events.isLoading ? <p className='text-sm text-muted-foreground'>Loading events...</p> : null}
             {events.error ? <p className='text-sm text-red-600'>Failed to load events.</p> : null}
             {events.data?.rows?.length ? (
               events.data.rows.slice(0, 8).map((event) => (
-                <div key={event.id} className='rounded-lg border border-border/70 p-3 text-sm'>
-                  <div className='flex items-center justify-between gap-2'>
-                    <span className='font-medium'>{event.eventType}</span>
-                    <span className='text-xs text-muted-foreground'>{formatDateTime(event.occurredAt)}</span>
+                <div key={event.id} className='surface-subtle rounded-2xl p-3'>
+                  <div className='flex items-start justify-between gap-3'>
+                    <div className='min-w-0'>
+                      <p className='text-sm font-semibold text-slate-900 dark:text-slate-50'>{event.eventType}</p>
+                      <p className='mt-1 text-xs text-muted-foreground'>
+                        {event.machine.machineCode} • {event.machine.location}
+                      </p>
+                    </div>
+                    <span className='text-[11px] text-muted-foreground'>{formatDateTime(event.occurredAt)}</span>
                   </div>
-                  <p className='mt-1 text-xs text-muted-foreground'>
-                    {event.machine.machineCode} • {event.machine.location}
-                  </p>
                 </div>
               ))
             ) : (
-              <p className='text-sm text-muted-foreground'>No events available.</p>
+              <CompactEmptyState title='No recent machine events' message='New machine activity will appear here automatically.' />
             )}
           </CardContent>
         </Card>
@@ -132,12 +134,14 @@ export default function OverviewPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Machine Fleet Snapshot</CardTitle>
+          <SectionHeader title='Machine fleet snapshot' description='Availability and last-seen status without leaving the first screenful.' />
         </CardHeader>
         <CardContent>
-          {machines.isLoading ? <div className='text-sm text-muted-foreground'>Loading machines...</div> : null}
-          {machines.error ? <div className='text-sm text-red-600'>Failed to load machines.</div> : null}
-          {machines.data ? <DataTable columns={machineColumns} data={machines.data} searchPlaceholder='Search machine or location...' /> : null}
+          {machines.isLoading ? <p className='text-sm text-muted-foreground'>Loading machines...</p> : null}
+          {machines.error ? <p className='text-sm text-red-600'>Failed to load machines.</p> : null}
+          {machines.data ? (
+            <DataTable columns={machineColumns} data={machines.data} searchPlaceholder='Search machine or location...' emptyText='No machines found.' />
+          ) : null}
         </CardContent>
       </Card>
     </div>

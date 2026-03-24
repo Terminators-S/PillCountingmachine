@@ -1,4 +1,5 @@
-import { IsDateString, IsInt, IsObject, IsOptional, IsString, MaxLength, MinLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsDateString, IsInt, IsObject, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 export class IngestEventDto {
   @IsString()
@@ -43,11 +44,13 @@ export class EventListQueryDto {
   to?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   pageSize?: number;

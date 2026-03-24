@@ -103,7 +103,7 @@ export function DataTable<TData>({
           value={globalFilter}
           onChange={(event) => setGlobalFilter(event.target.value)}
           placeholder={searchPlaceholder}
-          className='w-full md:max-w-sm'
+          className='w-full md:max-w-xs'
         />
         {onBulkAction && selectedRows.length > 0 ? (
           <Button size='sm' variant='secondary' onClick={() => onBulkAction(selectedRows)}>
@@ -121,7 +121,7 @@ export function DataTable<TData>({
                   <th
                     key={header.id}
                     className={cn(
-                      'border-b border-border/70 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground',
+                      'border-b border-border/70 px-3.5 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground',
                       header.column.getCanSort() ? 'cursor-pointer select-none' : ''
                     )}
                     onClick={header.column.getToggleSortingHandler()}
@@ -143,7 +143,7 @@ export function DataTable<TData>({
               table.getRowModel().rows.map((row) => (
                 <tr key={row.id} className='border-b border-border/60 transition-colors hover:bg-muted/25'>
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className='px-4 py-3 align-top text-slate-700 dark:text-slate-200'>
+                    <td key={cell.id} className='px-3.5 py-3 align-top text-slate-700 dark:text-slate-200'>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -151,7 +151,7 @@ export function DataTable<TData>({
               ))
             ) : (
               <tr>
-                <td className='px-3 py-10 text-center text-muted-foreground' colSpan={computedColumns.length}>
+                <td className='px-3 py-8 text-center text-sm text-muted-foreground' colSpan={computedColumns.length}>
                   {emptyText}
                 </td>
               </tr>

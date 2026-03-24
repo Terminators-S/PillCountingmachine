@@ -23,7 +23,7 @@ const variantMap: Record<LiveConnectionBadgeProps['state'], 'default' | 'success
 
 export function LiveConnectionBadge({ state, lastSyncAt }: LiveConnectionBadgeProps) {
   return (
-    <div className='flex items-center gap-2 rounded-full border border-border/70 bg-white/70 px-3 py-1.5 text-xs text-muted-foreground shadow-sm dark:bg-slate-950/45'>
+    <div className='flex items-center gap-2 rounded-full border border-border/70 bg-white/80 px-2.5 py-1 text-[11px] text-muted-foreground shadow-sm dark:bg-slate-950/45'>
       <Badge variant={variantMap[state]}>{labelMap[state]}</Badge>
       <span>{lastSyncAt ? `Last sync ${new Date(lastSyncAt).toLocaleTimeString()}` : 'No sync yet'}</span>
     </div>

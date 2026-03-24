@@ -15,8 +15,8 @@ export function AppBreadcrumbs() {
   const parts = pathname.split('/').filter(Boolean);
 
   return (
-    <nav aria-label='Breadcrumb' className='flex items-center gap-1 text-xs text-muted-foreground'>
-      <span>Operations Console</span>
+    <nav aria-label='Breadcrumb' className='flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground'>
+      <span>Operations</span>
       {parts.map((part) => (
         <span key={part} className='inline-flex items-center gap-1'>
           <ChevronRight className='h-3 w-3' />
