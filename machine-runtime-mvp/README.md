@@ -210,7 +210,8 @@ machine-runtime-mvp/
 ├── .env.example
 ├── requirements.txt
 ├── config/
-│   └── camera.default.json
+│   ├── camera.default.json
+│   └── counting.default.json
 ├── logs/
 │   ├── captures/
 │   │   └── .gitkeep
@@ -226,13 +227,22 @@ machine-runtime-mvp/
 │   ├── list_cameras.sh
 │   ├── pi_setup.sh
 │   ├── run_camera_capture_test.sh
+│   ├── run_counting_mvp.sh
 │   └── setup_venv.sh
 ├── src/
 │   ├── __init__.py
+│   ├── camera.py
 │   ├── camera_capture_test.py
-│   └── config.py
+│   ├── config.py
+│   ├── detector.py
+│   ├── line_counter.py
+│   ├── main.py
+│   ├── recorder.py
+│   ├── roi.py
+│   └── tracker.py
 └── tests/
-    └── test_config.py
+    ├── test_config.py
+    └── test_line_counter.py
 ```
 
 ### Why each folder exists
@@ -246,6 +256,21 @@ machine-runtime-mvp/
 - `scripts/`: Pi helper scripts for setup and repeatable commands.
 - `src/`: Python runtime code.
 - `tests/`: small sanity checks for config loading and later logic tests.
+
+## 3A. Current Counting Milestone Files
+
+The current next-step counting milestone is implemented with these files:
+
+- `config/counting.default.json`: fixed ROI, virtual count line, allowed direction, contour detector settings, tracker settings, and recording settings.
+- `src/camera.py`: shared camera open, warmup, read, and metadata helpers.
+- `src/roi.py`: ROI validation, ROI cropping, and line coordinate helpers.
+- `src/detector.py`: simple contour-based pill candidate detector for a controlled lane.
+- `src/tracker.py`: centroid tracker with stable track IDs.
+- `src/line_counter.py`: one-direction line crossing counter with duplicate prevention.
+- `src/recorder.py`: local run folder creation, debug frame saving, event CSV logging, and summary JSON output.
+- `src/main.py`: local counting loop that ties everything together.
+- `scripts/run_counting_mvp.sh`: Pi entry point for the counting loop.
+- `tests/test_line_counter.py`: simulated crossing and duplicate-prevention tests.
 
 ## 4. First Implementation Milestone
 

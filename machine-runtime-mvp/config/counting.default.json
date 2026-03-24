@@ -1,0 +1,35 @@
+{
+  "roi": {
+    "x": 280,
+    "y": 120,
+    "width": 720,
+    "height": 420
+  },
+  "count_line": {
+    "start": [60, 210],
+    "end": [660, 210],
+    "allowed_direction": "down"
+  },
+  "detector": {
+    "mode": "contour",
+    "threshold_type": "binary_inverse",
+    "binary_threshold": 145,
+    "blur_kernel_size": 5,
+    "morph_kernel_size": 5,
+    "min_area": 250,
+    "max_area": 14000,
+    "min_width": 12,
+    "min_height": 12
+  },
+  "tracker": {
+    "max_distance": 90,
+    "max_missing_frames": 8,
+    "max_trace_points": 20
+  },
+  "recording": {
+    "save_debug_overlay_frames": true,
+    "debug_frame_interval": 30,
+    "max_debug_frames": 100,
+    "save_crossing_event_frames": true
+  }
+}
