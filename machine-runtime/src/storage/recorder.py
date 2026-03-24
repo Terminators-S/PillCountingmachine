@@ -101,7 +101,7 @@ class RunRecorder:
                 ]
             )
 
-    def finalize(self, summary: dict[str, Any]) -> None:
+    def finalize(self, summary: dict[str, Any]) -> dict[str, Any]:
         full_summary = {
             **summary,
             "run_directory": str(self.run_dir),
@@ -112,3 +112,4 @@ class RunRecorder:
             "event_frame_paths": self.event_frame_paths,
         }
         self.summary_path.write_text(json.dumps(full_summary, indent=2), encoding="utf-8")
+        return full_summary

@@ -16,6 +16,8 @@ class CameraConfigTests(unittest.TestCase):
         self.assertGreater(config.frame_width, 0)
         self.assertGreater(config.frame_height, 0)
         self.assertGreaterEqual(config.camera_index, 0)
+        self.assertTrue(config.machine_name)
+        self.assertTrue(config.display_window_name)
 
     def test_counting_config_loads(self):
         config = load_counting_config()

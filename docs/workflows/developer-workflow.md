@@ -23,6 +23,13 @@ cd ~/pill-count-ui/machine-runtime
 bash scripts/run_machine_runtime.sh --max-frames 300
 ```
 
+### Replay a saved clip
+
+```bash
+cd ~/pill-count-ui/machine-runtime
+bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed
+```
+
 ### Local validation
 
 From the repo root:
@@ -79,3 +86,5 @@ This is a support path, not the core machine runtime.
 - mixing hardware debugging with platform feature work
 - editing the old bridge runtime before checking the active `machine-runtime/`
 - pushing dashboard-driven requirements into the Pi runtime too early
+
+Use [`validation-checklist.md`](validation-checklist.md) when you want a quick acceptance review after a run.

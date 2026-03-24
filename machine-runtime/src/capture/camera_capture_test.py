@@ -12,6 +12,7 @@ import cv2
 
 from .camera import collect_camera_session_info, open_camera, read_frame_with_timeout, warmup_camera
 from ..config import CameraRuntimeConfig, load_camera_config, project_root
+from ..overlay_ui import close_preview_window, prepare_preview_window
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,18 +76,22 @@ def try_preview(frame, config: CameraRuntimeConfig, disabled: bool) -> None:
     if disabled:
         print("Preview disabled by flag.")
         return
+    if not config.show_preview:
+        print("Preview disabled by config.")
+        return
 
     if not os.environ.get("DISPLAY") and sys.platform.startswith("linux"):
         print("DISPLAY is not set. Skipping preview window and relying on saved frame.")
         return
 
     try:
+        prepare_preview_window(config.display_window_name, config.display_fullscreen)
         preview_end = time.time() + config.preview_seconds
         while time.time() < preview_end:
-            cv2.imshow("Machine MVP Camera Test", frame)
+            cv2.imshow(config.display_window_name, frame)
             if cv2.waitKey(30) & 0xFF in (27, ord("q")):
                 break
-        cv2.destroyAllWindows()
+        close_preview_window(config.display_window_name)
     except cv2.error as exc:
         print(f"Preview skipped because OpenCV GUI is unavailable: {exc}")
 

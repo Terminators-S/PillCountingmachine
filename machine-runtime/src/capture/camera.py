@@ -28,6 +28,10 @@ def open_camera(config: CameraRuntimeConfig) -> cv2.VideoCapture:
     return capture
 
 
+def open_video_file(video_path: str) -> cv2.VideoCapture:
+    return cv2.VideoCapture(video_path)
+
+
 def warmup_camera(capture: cv2.VideoCapture, warmup_frames: int) -> None:
     for _ in range(max(0, warmup_frames)):
         capture.read()
@@ -41,6 +45,13 @@ def read_frame_with_timeout(capture: cv2.VideoCapture, timeout_seconds: int):
         if ok and frame is not None and frame.size > 0:
             return frame
         time.sleep(0.05)
+    return None
+
+
+def read_frame_from_replay(capture: cv2.VideoCapture):
+    ok, frame = capture.read()
+    if ok and frame is not None and frame.size > 0:
+        return frame
     return None
 
 

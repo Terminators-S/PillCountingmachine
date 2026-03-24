@@ -149,8 +149,10 @@ The older `machine-runtime-mvp/` folder remains only as a temporary breadcrumb f
 - [Hardware-first architecture](docs/architecture/hardware-first-mvp.md)
 - [Raspberry Pi setup](docs/hardware/raspberry-pi-setup.md)
 - [Developer workflow](docs/workflows/developer-workflow.md)
+- [Validation checklist](docs/workflows/validation-checklist.md)
 - [MVP scope and deferred scope](docs/milestones/mvp-scope.md)
 - [Implementation roadmap](docs/milestones/implementation-roadmap.md)
+- [Next-step note](docs/milestones/next-step-note.md)
 - [Repository refactor summary](docs/workflows/refactor-summary.md)
 
 ## Current Engineering Rule

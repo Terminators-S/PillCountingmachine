@@ -9,12 +9,16 @@ from typing import Any
 @dataclass(frozen=True)
 class CameraRuntimeConfig:
     camera_index: int = 0
+    machine_name: str = "pill-counter-pi"
     frame_width: int = 1280
     frame_height: int = 720
     fps: int = 30
     warmup_frames: int = 20
     capture_timeout_seconds: int = 10
     preview_seconds: int = 5
+    show_preview: bool = True
+    display_window_name: str = "PillCountingMachine Runtime"
+    display_fullscreen: bool = True
     save_preview_frame: bool = True
     capture_dir: str = "logs/captures"
     run_log_dir: str = "logs/runs"

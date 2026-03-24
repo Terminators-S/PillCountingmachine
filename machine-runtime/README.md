@@ -34,6 +34,7 @@ machine-runtime/
     run_camera_capture_test.sh
     run_counting_mvp.sh
     run_machine_runtime.sh
+    run_replay_clip.sh
     setup_venv.sh
   src/
     capture/
@@ -154,11 +155,41 @@ Expected outputs:
 bash scripts/run_machine_runtime.sh --max-frames 300
 ```
 
+By default, the runtime uses the configured preview window and will go fullscreen on the Pi display. Use `--windowed` if you want to calibrate on a development desktop.
+
 Compatibility alias:
 
 ```bash
 bash scripts/run_counting_mvp.sh --max-frames 300
 ```
+
+### 6. Replay a saved test clip
+
+```bash
+bash scripts/run_replay_clip.sh datasets/test-clips/example.mp4 --windowed
+```
+
+This is useful for debugging misses and double-counts without needing live hardware for every iteration.
+
+## ROI And Count Line Calibration
+
+Edit [`config/counting.default.json`](config/counting.default.json):
+
+- `roi.x`
+- `roi.y`
+- `roi.width`
+- `roi.height`
+- `count_line.start`
+- `count_line.end`
+- `count_line.allowed_direction`
+
+Calibration workflow:
+
+1. run `bash scripts/run_machine_runtime.sh --windowed`
+2. adjust the ROI so it covers only the physical lane
+3. place the count line where every valid pill crossing is clearly visible
+4. confirm the allowed direction matches the real pill travel direction
+5. rerun until one crossing increments the count exactly once
 
 ## Verification Checklist
 
@@ -192,8 +223,21 @@ Per run, inspect:
 
 - `runs/run_<timestamp>/session.json`
 - `runs/run_<timestamp>/summary.json`
+- `runs/run_<timestamp>/pending_sync.json`
 - `runs/run_<timestamp>/events.csv`
 - `runs/run_<timestamp>/debug_frames/`
 - `runs/run_<timestamp>/event_frames/`
 
 These files are the primary debugging evidence for the MVP.
+
+## Validation And Next Step
+
+- Acceptance checklist: [`../docs/workflows/validation-checklist.md`](../docs/workflows/validation-checklist.md)
+- Next-step note: [`../docs/milestones/next-step-note.md`](../docs/milestones/next-step-note.md)
+
+## Known Limitations
+
+- the detector is still a constrained contour-based MVP, not a trained multi-class model
+- the runtime assumes one stable lane and one dominant direction of motion
+- replay mode is intended for debugging, not for benchmarking real-time camera behavior
+- backend sync is intentionally stubbed as `pending_sync.json` for now
