@@ -114,8 +114,12 @@ class RunRecorder:
     def finalize(self, summary: dict[str, Any]) -> dict[str, Any]:
         full_summary = {
             **summary,
+            "session_path": str(self.session_path),
+            "summary_path": str(self.summary_path),
             "run_directory": str(self.run_dir),
             "event_log_path": str(self.event_log_path),
+            "debug_frames_dir": str(self.debug_dir),
+            "event_frames_dir": str(self.event_dir),
             "debug_frame_count": self.debug_frame_count,
             "event_frame_count": self.event_frame_count,
             "debug_frame_paths": self.debug_frame_paths,

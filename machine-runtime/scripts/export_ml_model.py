@@ -66,6 +66,15 @@ def expected_output_path(model_path: Path, fmt: str) -> Path:
     raise ValueError(f"Unsupported format: {fmt}")
 
 
+def print_export_plan(model_key: str, model_path: Path, formats: list[str]) -> None:
+    print("Export plan:")
+    print(f"- model key: {model_key}")
+    print(f"- source checkpoint: {model_path}")
+    print(f"- source directory: {model_path.parent}")
+    for fmt in formats:
+        print(f"- expected {fmt.upper()} output: {expected_output_path(model_path, fmt)}")
+
+
 def export_format(model_path: Path, fmt: str, args: argparse.Namespace) -> Path:
     from ultralytics import YOLO
 
@@ -86,13 +95,16 @@ def export_format(model_path: Path, fmt: str, args: argparse.Namespace) -> Path:
 
     print(f"\nExporting {model_path.name} -> {fmt.upper()} with {export_kwargs}")
     model.export(**export_kwargs)
-    return expected_output_path(model_path, fmt)
+    output_path = expected_output_path(model_path, fmt)
+    if not output_path.exists():
+        raise RuntimeError(f"{fmt.upper()} export finished but the expected output was not found at {output_path}")
+    return output_path.resolve()
 
 
 def main() -> int:
     args = parse_args()
     model_key, model_path = resolve_source_checkpoint(args)
-    print(f"Resolved model '{model_key}' to {model_path}")
+    print_export_plan(model_key, model_path, args.formats)
 
     generated_outputs: list[Path] = []
     for fmt in args.formats:

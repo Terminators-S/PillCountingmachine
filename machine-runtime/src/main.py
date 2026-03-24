@@ -205,6 +205,9 @@ def build_final_summary(
     status_text: str,
 ) -> dict[str, object]:
     counted_by_label = Counter(event.object_label for event in line_counter.events)
+    counted_by_label_dict = dict(counted_by_label)
+    counted_track_ids = sorted(line_counter.counted_track_ids)
+    runtime_fps = round(average_fps, 2)
     return {
         "run_id": run_id,
         "timestamp_utc": started_at_utc,
@@ -218,7 +221,8 @@ def build_final_summary(
             "height": camera_info.actual_height,
         },
         "fps": camera_info.actual_fps,
-        "average_fps": round(average_fps, 2),
+        "average_fps": runtime_fps,
+        "runtime_fps": runtime_fps,
         "roi": asdict(counting_config.roi),
         "line": {
             "start": list(line_points[0]),
@@ -228,9 +232,15 @@ def build_final_summary(
         },
         "model_used": detector_info.get("model_name") or detector_info.get("model_key"),
         "detector": {**asdict(counting_config.detector), **detector_info},
-        "counted_by_label": dict(counted_by_label),
+        "count_result": {
+            "total_count": line_counter.total_count,
+            "event_count": len(line_counter.events),
+            "counted_by_label": counted_by_label_dict,
+            "counted_track_ids": counted_track_ids,
+        },
+        "counted_by_label": counted_by_label_dict,
         "total_count": line_counter.total_count,
-        "counted_track_ids": sorted(line_counter.counted_track_ids),
+        "counted_track_ids": counted_track_ids,
         "duration_seconds": round(duration_seconds, 3),
         "frames_processed": frame_index,
         "event_count": len(line_counter.events),

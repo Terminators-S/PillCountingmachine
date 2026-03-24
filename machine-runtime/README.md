@@ -261,6 +261,11 @@ source .venv/bin/activate
 python scripts/export_ml_model.py --model-key local-train12 --formats ncnn onnx --imgsz 640
 ```
 
+Predictable output locations for `local-train12`:
+
+- `../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model/`
+- `../legacy/old-machine-runtime/machine-learning/models/local/train12/best.onnx`
+
 Copy the exported artifact to the Pi:
 
 ```bash
@@ -392,6 +397,8 @@ When ML mode is active, the event and summary files also include:
 - detector backend and model metadata
 - counted object labels
 - counted event confidence and source model fields
+- runtime FPS and count result summary
+- session, summary, debug-frame, and event-frame evidence paths
 
 ## Validation And Next Step
 

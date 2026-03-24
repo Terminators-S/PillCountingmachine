@@ -136,6 +136,11 @@ source .venv/bin/activate
 python scripts/export_ml_model.py --model-key local-train12 --formats ncnn onnx --imgsz 640
 ```
 
+Expected export outputs for the first Pi pass:
+
+- `../legacy/old-machine-runtime/machine-learning/models/local/train12/best_ncnn_model/`
+- `../legacy/old-machine-runtime/machine-learning/models/local/train12/best.onnx`
+
 Copy the preferred NCNN artifact to the Pi:
 
 ```bash
@@ -168,7 +173,7 @@ bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path mod
 - the exported model loads successfully
 - detections appear in the ROI
 - line crossing increments count correctly
-- `summary.json` records detector backend and model
+- `summary.json` records detector backend, model key, model path, model format, runtime FPS, count result, and evidence paths
 - debug frames and event evidence are saved
 - contour and ML runs can be compared on the same lane or replay clip
 
