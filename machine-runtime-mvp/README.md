@@ -207,6 +207,7 @@ The MVP does not need these things yet:
 machine-runtime-mvp/
 ├── README.md
 ├── .gitignore
+├── .env.example
 ├── requirements.txt
 ├── config/
 │   └── camera.default.json
@@ -215,6 +216,8 @@ machine-runtime-mvp/
 │   │   └── .gitkeep
 │   └── runs/
 │       └── .gitkeep
+├── runs/
+│   └── .gitkeep
 ├── models/
 │   └── .gitkeep
 ├── samples/
@@ -222,7 +225,8 @@ machine-runtime-mvp/
 ├── scripts/
 │   ├── list_cameras.sh
 │   ├── pi_setup.sh
-│   └── run_camera_capture_test.sh
+│   ├── run_camera_capture_test.sh
+│   └── setup_venv.sh
 ├── src/
 │   ├── __init__.py
 │   ├── camera_capture_test.py
@@ -232,9 +236,11 @@ machine-runtime-mvp/
 ```
 
 ### Why each folder exists
+- `.env.example`: a future-safe place for Pi-specific runtime values without hardcoding them.
 - `config/`: runtime settings that should change without editing Python code.
 - `logs/captures/`: saved debug frames from camera tests and later debug runs.
 - `logs/runs/`: metadata JSON and later counting logs.
+- `runs/`: one-file run summaries that are easy to inspect or send to a backend later.
 - `models/`: future detection models, not used yet.
 - `samples/`: short real videos and images captured from the actual machine.
 - `scripts/`: Pi helper scripts for setup and repeatable commands.
@@ -309,6 +315,7 @@ ls
 
 You should see:
 - `README.md`
+- `.env.example`
 - `config`
 - `scripts`
 - `src`
@@ -318,10 +325,7 @@ You should see:
 Run these commands inside `machine-runtime-mvp/`:
 
 ```bash
-python3 -m venv --system-site-packages .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+bash scripts/setup_venv.sh
 ```
 
 Why `--system-site-packages` is used:
@@ -408,6 +412,7 @@ Expected output:
 Expected generated files:
 - `logs/captures/camera_test_<timestamp>.jpg`
 - `logs/runs/camera_test_<timestamp>.json`
+- `runs/camera_test_<timestamp>.summary.json`
 
 ### Step 6. Review the saved frame
 
@@ -473,4 +478,3 @@ After this milestone works, the next correct steps are:
 4. capture sample pill videos,
 5. choose the first detection method,
 6. only then move toward tracking and counting.
-

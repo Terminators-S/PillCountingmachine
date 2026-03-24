@@ -17,6 +17,7 @@ class CameraRuntimeConfig:
     save_preview_frame: bool = True
     capture_dir: str = "logs/captures"
     run_log_dir: str = "logs/runs"
+    run_output_dir: str = "runs"
 
 
 def project_root() -> Path:

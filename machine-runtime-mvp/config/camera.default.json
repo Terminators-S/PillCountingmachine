@@ -8,6 +8,6 @@
   "preview_seconds": 5,
   "save_preview_frame": true,
   "capture_dir": "logs/captures",
-  "run_log_dir": "logs/runs"
+  "run_log_dir": "logs/runs",
+  "run_output_dir": "runs"
 }
-
