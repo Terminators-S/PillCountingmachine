@@ -158,6 +158,8 @@ def build_session_metadata(
     source_mode: str,
     source_label: str,
 ) -> dict[str, object]:
+    detector_backend = str(detector_info.get("backend") or counting_config.detector.mode)
+    ml_runtime_backend = detector_info.get("runtime_backend")
     return {
         "run_id": run_id,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -179,6 +181,11 @@ def build_session_metadata(
             "allowed_direction": counting_config.count_line.allowed_direction,
             "orientation": counting_config.count_line.orientation,
         },
+        "detector_backend": detector_backend,
+        "ml_runtime_backend": ml_runtime_backend,
+        "model_key": detector_info.get("model_key"),
+        "model_path": detector_info.get("model_path"),
+        "model_format": detector_info.get("model_format"),
         "detector": {**asdict(counting_config.detector), **detector_info},
         "tracker": asdict(counting_config.tracker),
         "recording": asdict(counting_config.recording),
@@ -208,6 +215,8 @@ def build_final_summary(
     counted_by_label_dict = dict(counted_by_label)
     counted_track_ids = sorted(line_counter.counted_track_ids)
     runtime_fps = round(average_fps, 2)
+    detector_backend = str(detector_info.get("backend") or counting_config.detector.mode)
+    ml_runtime_backend = detector_info.get("runtime_backend")
     return {
         "run_id": run_id,
         "timestamp_utc": started_at_utc,
@@ -230,6 +239,11 @@ def build_final_summary(
             "allowed_direction": counting_config.count_line.allowed_direction,
             "orientation": counting_config.count_line.orientation,
         },
+        "detector_backend": detector_backend,
+        "ml_runtime_backend": ml_runtime_backend,
+        "model_key": detector_info.get("model_key"),
+        "model_path": detector_info.get("model_path"),
+        "model_format": detector_info.get("model_format"),
         "model_used": detector_info.get("model_name") or detector_info.get("model_key"),
         "detector": {**asdict(counting_config.detector), **detector_info},
         "count_result": {

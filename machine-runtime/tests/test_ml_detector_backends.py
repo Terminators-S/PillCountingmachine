@@ -64,6 +64,8 @@ class MlDetectorBackendSelectionTests(unittest.TestCase):
 
             self.assertEqual("onnx", detector.runtime_backend)
             self.assertEqual("onnx", detector.describe()["runtime_backend"])
+            self.assertEqual("onnx", detector.describe()["ml_runtime_backend"])
+            self.assertEqual("ml", detector.describe()["detector_backend"])
             self.assertEqual("Local train12 best", detector.model_name)
             load_onnx.assert_called_once()
 
@@ -80,8 +82,36 @@ class MlDetectorBackendSelectionTests(unittest.TestCase):
 
             self.assertEqual("ncnn", detector.runtime_backend)
             self.assertEqual("ncnn", detector.describe()["runtime_backend"])
+            self.assertEqual("ncnn", detector.describe()["ml_runtime_backend"])
+            self.assertEqual("ml", detector.describe()["detector_backend"])
             self.assertEqual("Local train12 best", detector.model_name)
             load_ncnn.assert_called_once()
+
+    def test_pt_path_selects_pytorch_backend(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = Path(temp_dir) / "pill-model.pt"
+            model_path.write_text("placeholder", encoding="utf-8")
+            with patch.object(MlDetector, "_load_pytorch_backend", return_value=DummyBackend("pytorch")) as load_pytorch:
+                with patch.object(MlDetector, "_load_onnx_backend", side_effect=AssertionError("onnx backend should not load")):
+                    with patch.object(MlDetector, "_load_ncnn_backend", side_effect=AssertionError("ncnn backend should not load")):
+                        detector = MlDetector(DetectorConfig(mode="ml", model_key="local-train12", model_path=str(model_path)))
+
+            self.assertEqual("pytorch", detector.runtime_backend)
+            self.assertEqual("pytorch", detector.describe()["runtime_backend"])
+            self.assertEqual("pytorch", detector.describe()["ml_runtime_backend"])
+            self.assertEqual("ml", detector.describe()["detector_backend"])
+            load_pytorch.assert_called_once()
+
+    def test_missing_ncnn_files_fails_clearly(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_dir = Path(temp_dir) / "pill-model_ncnn_model"
+            model_dir.mkdir()
+            (model_dir / "model.ncnn.param").write_text("param", encoding="utf-8")
+
+            with self.assertRaises(RuntimeError) as context:
+                MlDetector(DetectorConfig(mode="ml", model_key="local-train12", model_path=str(model_dir)))
+
+        self.assertIn("NCNN model directory is missing model.ncnn.param or model.ncnn.bin", str(context.exception))
 
 
 @unittest.skipUnless(importlib.util.find_spec("onnxruntime"), "onnxruntime is not installed")
@@ -96,6 +126,7 @@ class OnnxBackendSmokeTests(unittest.TestCase):
             detections, _ = detector.infer(frame, roi)
 
         self.assertEqual("onnx", detector.runtime_backend)
+        self.assertEqual("onnx", detector.describe()["ml_runtime_backend"])
         self.assertIsInstance(detections, list)
 
 
@@ -120,6 +151,7 @@ class NcnnBackendSmokeTests(unittest.TestCase):
             detections, _ = detector.infer(frame, roi)
 
         self.assertEqual("ncnn", detector.runtime_backend)
+        self.assertEqual("ncnn", detector.describe()["ml_runtime_backend"])
         self.assertIsInstance(detections, list)
 
 

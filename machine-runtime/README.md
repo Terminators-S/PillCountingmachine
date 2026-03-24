@@ -404,8 +404,8 @@ These files are the primary debugging evidence for the MVP.
 
 When ML mode is active, the event and summary files also include:
 
-- detector backend and model metadata
-- ML runtime backend (`pt`, `onnx`, or `ncnn`)
+- `detector_backend`, `ml_runtime_backend`, `model_format`, `model_path`, and `model_key`
+- ML runtime backend (`pytorch`, `onnx`, or `ncnn`)
 - counted object labels
 - counted event confidence and source model fields
 - runtime FPS and count result summary

@@ -33,8 +33,12 @@ def resolve_override_model_path(model_path: str) -> Path:
 
 def detect_model_format(model_path: Path) -> str:
     if model_path.is_dir():
-        if (model_path / "model.ncnn.param").exists() and (model_path / "model.ncnn.bin").exists():
+        has_param = (model_path / "model.ncnn.param").exists()
+        has_bin = (model_path / "model.ncnn.bin").exists()
+        if has_param and has_bin:
             return "ncnn"
+        if has_param or has_bin:
+            return "ncnn_incomplete"
         return "directory"
 
     suffix = model_path.suffix.lower()
@@ -140,9 +144,14 @@ def load_export_metadata(model_path: Path) -> dict[str, Any]:
 
 def resolve_runtime_backend(model_format: str) -> str:
     if model_format == "pytorch":
-        return "pt"
+        return "pytorch"
     if model_format in {"onnx", "ncnn"}:
         return model_format
+    if model_format == "ncnn_incomplete":
+        raise RuntimeError(
+            "NCNN model directory is missing model.ncnn.param or model.ncnn.bin. "
+            "Provide an exported NCNN directory containing both files."
+        )
     raise RuntimeError(
         f"Unsupported ML model format '{model_format}'. "
         f"Supported formats are .pt, .onnx, or an NCNN directory containing model.ncnn.param and model.ncnn.bin."
@@ -269,7 +278,7 @@ class UltralyticsPtBackend:
                 "Install it with: bash scripts/setup_venv.sh --with-ml"
             ) from exc
 
-        self.runtime_backend = "pt"
+        self.runtime_backend = "pytorch"
         self.model = YOLO(str(model_path))
         self.class_names = self.model.names
 
@@ -639,7 +648,9 @@ class MlDetector:
         return {
             "mode": "ml",
             "backend": self.backend_name,
+            "detector_backend": self.backend_name,
             "runtime_backend": self.runtime_backend,
+            "ml_runtime_backend": self.runtime_backend,
             "provider": self.model_provider,
             "model_key": self.model_key,
             "model_name": self.model_name,
@@ -655,7 +666,7 @@ class MlDetector:
         return candidate
 
     def _load_runtime_backend(self):
-        if self.runtime_backend == "pt":
+        if self.runtime_backend == "pytorch":
             return self._load_pytorch_backend()
         if self.runtime_backend == "onnx":
             return self._load_onnx_backend()
