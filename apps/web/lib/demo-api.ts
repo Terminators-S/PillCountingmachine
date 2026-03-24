@@ -1429,6 +1429,69 @@ export function getDemoLiveEvents() {
   return clone(readState().liveEvents);
 }
 
+export function provisionDemoSessionForExternalUser(input: {
+  firebaseUid: string;
+  email: string;
+  fullName: string;
+}) {
+  ensureBrowser();
+  const state = readState();
+  const normalizedEmail = String(input.email || '').trim().toLowerCase();
+  const normalizedName = String(input.fullName || '').trim() || 'Firebase User';
+
+  if (!normalizedEmail) {
+    throw new Error('An email address is required to provision a demo session.');
+  }
+
+  let user = state.users.find((entry) => entry.email.toLowerCase() === normalizedEmail) || null;
+  let didChange = false;
+
+  if (!user) {
+    user = {
+      id: input.firebaseUid ? `firebase_${input.firebaseUid}` : createId('user'),
+      email: normalizedEmail,
+      fullName: normalizedName,
+      isActive: true,
+      createdAt: nowIso(),
+      roles: ['ADMIN'],
+      password: DEMO_DEFAULT_PASSWORD,
+    };
+    state.users.unshift(user);
+    didChange = true;
+    pushAuditLog(state, {
+      actorType: 'SYSTEM',
+      action: 'POST /auth/firebase-register',
+      resourceType: 'auth',
+      resourceId: user.id,
+      metadata: { email: normalizedEmail, provider: 'firebase' },
+    });
+  } else {
+    if (user.fullName !== normalizedName) {
+      user.fullName = normalizedName;
+      didChange = true;
+    }
+    if (!user.isActive) {
+      user.isActive = true;
+      didChange = true;
+    }
+  }
+
+  if (didChange) {
+    writeState(state);
+  }
+
+  const tokens = issueTokens(user.id);
+  return {
+    ...tokens,
+    profile: {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      roles: [...user.roles],
+    } as MeProfile,
+  };
+}
+
 export async function demoApiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method || 'GET').toUpperCase();
   const url = new URL(path, 'https://demo.local');

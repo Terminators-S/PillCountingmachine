@@ -538,6 +538,14 @@ Common web settings include:
 - `NEXT_PUBLIC_STORE_NAME`
 - `NEXT_PUBLIC_STORE_LOGO_URL`
 - `NEXT_PUBLIC_DEMO_MODE`
+- `NEXT_PUBLIC_ENABLE_FIREBASE_AUTH`
+- `NEXT_PUBLIC_STATIC_EXPORT`
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
 
 ### How proxying works
 
@@ -590,6 +598,39 @@ Important details:
 - the API still needs an external PostgreSQL database
 - the web app should usually be given `API_PROXY_TARGET=https://<api-project>/api`
 - `NEXT_PUBLIC_DEMO_MODE=true` can be used for frontend-only previews
+
+### Firebase Hosting + Firebase Auth
+
+The repository also supports a Firebase-hosted UI flow for teacher/demo submissions:
+
+- Firebase Hosting serves the static export from `apps/web/out`
+- Firebase Authentication can handle email/password and Google login
+- the current Firebase path uses demo-mode data in the browser after login
+- it does not deploy the NestJS API or PostgreSQL database to Firebase Spark
+
+Setup:
+
+1. Create a Firebase project and add a Web app.
+2. Enable Authentication providers you need, usually `Email/Password` and `Google`.
+3. Copy `apps/web/.env.firebase.example` to `apps/web/.env.local` and fill in the Firebase web config values.
+4. Log in to the Firebase CLI and select your project:
+
+```bash
+npx firebase-tools login
+npx firebase-tools use --add
+```
+
+5. Build and deploy the static web app:
+
+```bash
+npm run deploy:web:firebase
+```
+
+Important details:
+
+- leave `NEXT_PUBLIC_DEMO_MODE=true` for the Firebase Hosting flow unless you are also replacing the backend
+- `NEXT_PUBLIC_ENABLE_FIREBASE_AUTH=true` enables Firebase login on the `/login` screen
+- the dashboard auth guard is client-side in this mode so the site can be exported statically
 
 ## Useful Reference Files
 

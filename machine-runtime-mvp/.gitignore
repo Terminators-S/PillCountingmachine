@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+logs/captures/*
+logs/runs/*
+!logs/captures/.gitkeep
+!logs/runs/.gitkeep
+config/camera.local.json
+

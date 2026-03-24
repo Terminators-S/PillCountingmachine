@@ -13,6 +13,8 @@
     "dev:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\start-local.ps1",
     "dev:machine": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\start-live-machine.ps1",
     "dev:machine:public": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\start-live-machine-public.ps1",
+    "build:web:firebase": "node scripts/build-firebase-web.mjs",
+    "deploy:web:firebase": "npm run build:web:firebase && npx firebase-tools deploy --only hosting",
     "db:apply": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\apply-live-sql.ps1",
     "db:dump": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\dump-postgres.ps1",
     "db:view": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\export-live-data.ps1",
@@ -28,8 +30,5 @@
   "devDependencies": {
     "concurrently": "^9.1.2",
     "typescript": "^5.8.2"
-  },
-  "dependencies": {
-    "firebase": "^12.10.0"
   }
 }

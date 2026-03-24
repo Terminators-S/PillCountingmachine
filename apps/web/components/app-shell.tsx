@@ -26,10 +26,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { clearTokens } from '../lib/auth';
 import { apiRequest } from '../lib/api';
 import { cn } from '../lib/utils';
 import { AppBrandingSettings, MeProfile } from '../types/api';
+import { useAppSession } from './app-session-provider';
 import { AppBreadcrumbs } from './app-breadcrumbs';
 import { LiveConnectionBadge } from './live-connection-badge';
 import { ThemeToggle } from './theme-toggle';
@@ -92,6 +92,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { logout } = useAppSession();
 
   const { data: me } = useQuery({
     queryKey: ['me'],
@@ -284,8 +285,8 @@ export function AppShell({
                       <Button
                         variant='secondary'
                         size='sm'
-                        onClick={() => {
-                          clearTokens();
+                        onClick={async () => {
+                          await logout();
                           router.replace('/login');
                         }}
                       >
