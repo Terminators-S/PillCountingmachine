@@ -65,6 +65,8 @@ Recommended Raspberry Pi ML deployment order:
 3. exported ONNX model as the secondary portable path
 4. raw `.pt` loading only for development and debugging
 
+Exported NCNN and ONNX paths do not require Ultralytics. Only raw `.pt` loading needs `bash scripts/setup_venv.sh --with-ml`.
+
 If you plan to run exported ONNX models:
 
 ```bash
@@ -151,12 +153,16 @@ scp ../legacy/old-machine-runtime/machine-learning/models/local/train12/best.onn
 Use the recommended exported NCNN detector:
 
 ```bash
+source .venv/bin/activate
+python -m pip install ncnn
 bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best_ncnn_model --detector-device cpu --max-frames 300
 ```
 
 Use an exported ONNX detector only when you want the secondary portable path:
 
 ```bash
+source .venv/bin/activate
+python -m pip install onnxruntime
 bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best.onnx --max-frames 300
 ```
 

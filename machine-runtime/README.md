@@ -70,8 +70,9 @@ Two detector backends are now available:
   - built-in fallback for quick bench debugging
   - zero extra ML dependency beyond OpenCV
 - `ml`
-  - can load the legacy local `.pt` checkpoints for development and debugging
-  - can load exported `.onnx` files and NCNN model directories through `--detector-model-path`
+  - loads raw `.pt` checkpoints through Ultralytics only when the selected model is actually a `.pt`
+  - loads exported `.onnx` files through `onnxruntime` without requiring Ultralytics
+  - loads exported NCNN model directories through `ncnn` without requiring Ultralytics
   - defaults to `local-train12` as the first export candidate unless you have fresher comparison data
   - keeps the active machine-runtime in control of overlay, tracking, and counting
 
@@ -151,20 +152,21 @@ The venv uses `--system-site-packages` so the Pi can reuse the apt-installed Ope
 
 ### 2a. Install optional ML detector dependencies
 
-Only required when you want `detector.mode=ml`:
+Only required when you want raw `.pt` model loading in `detector.mode=ml`:
 
 ```bash
 bash scripts/setup_venv.sh --with-ml
 source .venv/bin/activate
 ```
 
-This installs `ultralytics` into the venv while keeping the contour-only path lightweight.
+This installs `ultralytics` into the venv while keeping the contour-only path lightweight. Exported NCNN and ONNX paths do not need Ultralytics.
 
 Recommended Raspberry Pi ML runtime dependency order:
 
 1. contour-only runtime for baseline validation
-2. `ultralytics` plus `ncnn` for the preferred exported-model path
+2. `ncnn` for the preferred exported-model path
 3. `onnxruntime` only when you want the secondary ONNX path
+4. `ultralytics` only when you need raw `.pt` debugging on the Pi
 
 If you want to run exported NCNN models, also install:
 
@@ -285,8 +287,12 @@ bash scripts/run_machine_runtime.sh --detector-mode contour --max-frames 300
 Run the recommended NCNN path on the Pi CPU:
 
 ```bash
+source .venv/bin/activate
+python -m pip install ncnn
 bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best_ncnn_model --detector-device cpu --max-frames 300
 ```
+
+This exported NCNN path does not require Ultralytics.
 
 If your Pi image and graphics stack support Vulkan through NCNN, you can try:
 
@@ -297,8 +303,12 @@ bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path mod
 Run the secondary ONNX path on the Pi:
 
 ```bash
+source .venv/bin/activate
+python -m pip install onnxruntime
 bash scripts/run_machine_runtime.sh --detector-mode ml --detector-model-path models/best.onnx --detector-device cpu --max-frames 300
 ```
+
+This exported ONNX path does not require Ultralytics.
 
 Contour comparison example:
 
@@ -395,6 +405,7 @@ These files are the primary debugging evidence for the MVP.
 When ML mode is active, the event and summary files also include:
 
 - detector backend and model metadata
+- ML runtime backend (`pt`, `onnx`, or `ncnn`)
 - counted object labels
 - counted event confidence and source model fields
 - runtime FPS and count result summary

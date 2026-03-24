@@ -27,9 +27,11 @@ class MlDetectorCatalogTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = Path(temp_dir) / "pill-model.onnx"
             model_path.write_text("placeholder", encoding="utf-8")
-            config = DetectorConfig(mode="ml", model_path=str(model_path), model_key="override-model")
+            config = DetectorConfig(mode="ml", model_path=str(model_path), model_key="local-train12")
             model_entry = resolve_legacy_model_entry(config)
-            self.assertEqual("override-model", model_entry["key"])
+            self.assertEqual("local-train12", model_entry["key"])
+            self.assertEqual("Local train12 best", model_entry["name"])
+            self.assertEqual(["capsules", "tablets"], model_entry["classes"])
             self.assertEqual(str(model_path), model_entry["absolutePath"])
 
     def test_detects_ncnn_directory_format(self):

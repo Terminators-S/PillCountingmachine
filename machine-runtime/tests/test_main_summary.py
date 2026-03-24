@@ -32,6 +32,7 @@ class BuildFinalSummaryTests(unittest.TestCase):
         )
         detector_info = {
             "backend": "ml",
+            "runtime_backend": "ncnn",
             "model_key": "local-train12",
             "model_name": "Local train12 best",
             "model_path": "/tmp/best_ncnn_model",
@@ -59,6 +60,7 @@ class BuildFinalSummaryTests(unittest.TestCase):
         )
 
         self.assertEqual("ml", summary["detector"]["backend"])
+        self.assertEqual("ncnn", summary["detector"]["runtime_backend"])
         self.assertEqual("local-train12", summary["detector"]["model_key"])
         self.assertEqual("/tmp/best_ncnn_model", summary["detector"]["model_path"])
         self.assertEqual("ncnn", summary["detector"]["model_format"])

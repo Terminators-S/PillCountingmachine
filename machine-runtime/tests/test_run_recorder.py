@@ -32,6 +32,7 @@ class RunRecorderTests(unittest.TestCase):
                 {
                     "detector": {
                         "backend": "ml",
+                        "runtime_backend": "ncnn",
                         "model_key": "local-train12",
                         "model_path": "/tmp/best_ncnn_model",
                         "model_format": "ncnn",
