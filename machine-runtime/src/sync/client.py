@@ -14,6 +14,15 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def build_machine_runs_endpoint(api_base_url: str) -> str:
+    normalized = str(api_base_url or "").strip().rstrip("/")
+    if not normalized:
+        raise ValueError("Backend API base URL is required.")
+    if normalized.endswith("/machine-runs"):
+        return normalized
+    return f"{normalized}/machine-runs"
+
+
 @dataclass(frozen=True)
 class SyncSettings:
     api_base_url: str
@@ -22,7 +31,7 @@ class SyncSettings:
 
     @property
     def machine_runs_endpoint(self) -> str:
-        return f"{self.api_base_url.rstrip('/')}/machine-runs"
+        return build_machine_runs_endpoint(self.api_base_url)
 
 
 def load_sync_payload(payload_path: Path) -> dict[str, Any]:
@@ -43,13 +52,16 @@ def update_summary_sync_metadata(run_dir: Path, payload: dict[str, Any], sync_en
     summary["pending_sync_path"] = str(run_dir / "pending_sync.json")
     summary["sync"] = {
         "enabled": sync_enabled,
+        "configured": bool(api_base_url),
+        "ready": sync_enabled,
         "status": sync_state.get("status") or payload.get("status"),
         "attempts": int(sync_state.get("attempts") or 0),
         "last_attempt_at_utc": sync_state.get("last_attempt_at_utc"),
         "last_synced_at_utc": sync_state.get("last_synced_at_utc"),
         "last_error": sync_state.get("last_error"),
+        "disabled_reason": None,
         "api_base_url": api_base_url,
-        "endpoint": f"{api_base_url.rstrip('/')}/machine-runs" if api_base_url else None,
+        "endpoint": build_machine_runs_endpoint(api_base_url) if api_base_url else None,
     }
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary["sync"]

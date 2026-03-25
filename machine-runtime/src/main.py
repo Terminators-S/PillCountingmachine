@@ -32,7 +32,7 @@ from .overlay_ui import (
     validate_count_line,
     validate_roi,
 )
-from .sync import SyncSettings, build_pending_sync_payload, sync_pending_payload, write_pending_sync_payload
+from .sync import SyncSettings, build_machine_runs_endpoint, build_pending_sync_payload, sync_pending_payload, write_pending_sync_payload
 from .storage import RunRecorder
 from .tracking import CentroidTracker, TrackedObject
 
@@ -298,6 +298,42 @@ def override_counting_config(counting_config: CountingRuntimeConfig, args: argpa
     )
 
 
+def build_preflight_sync_metadata(sync_api_url: str, sync_api_key: str, sync_disabled: bool) -> dict[str, object]:
+    api_base_url = sync_api_url or None
+    endpoint = build_machine_runs_endpoint(sync_api_url) if sync_api_url else None
+    configured = bool(sync_api_url or sync_api_key)
+    ready = bool(sync_api_url and sync_api_key and not sync_disabled)
+    status = "pending_sync"
+    disabled_reason = None
+
+    if sync_disabled:
+        status = "disabled"
+        disabled_reason = "disabled_by_flag"
+    elif sync_api_url and not sync_api_key:
+        status = "config_missing_api_key"
+        disabled_reason = "missing_api_key"
+    elif sync_api_key and not sync_api_url:
+        status = "config_missing_api_url"
+        disabled_reason = "missing_api_url"
+    elif not configured:
+        status = "not_configured"
+        disabled_reason = "not_configured"
+
+    return {
+        "enabled": ready,
+        "configured": configured,
+        "ready": ready,
+        "status": status,
+        "attempts": 0,
+        "last_attempt_at_utc": None,
+        "last_synced_at_utc": None,
+        "last_error": None,
+        "disabled_reason": disabled_reason,
+        "api_base_url": api_base_url,
+        "endpoint": endpoint,
+    }
+
+
 def run() -> int:
     args = parse_args()
     camera_config = load_camera_config(args.camera_config)
@@ -515,16 +551,7 @@ def run() -> int:
         sync_api_url = (args.sync_api_url or os.environ.get("PILLCOUNT_SYNC_API_URL") or "").strip()
         sync_api_key = (args.sync_api_key or os.environ.get("PILLCOUNT_SYNC_API_KEY") or "").strip()
         sync_timeout_value = args.sync_timeout_seconds or float(os.environ.get("PILLCOUNT_SYNC_TIMEOUT_SECONDS") or 10.0)
-        sync_metadata = {
-            "enabled": False,
-            "status": "pending_sync",
-            "attempts": 0,
-            "last_attempt_at_utc": None,
-            "last_synced_at_utc": None,
-            "last_error": None,
-            "api_base_url": sync_api_url or None,
-            "endpoint": f"{sync_api_url.rstrip('/')}/machine-runs" if sync_api_url else None,
-        }
+        sync_metadata = build_preflight_sync_metadata(sync_api_url, sync_api_key, args.no_sync)
         if not args.no_sync and sync_api_url and sync_api_key:
             sync_result = sync_pending_payload(
                 pending_sync_path,
@@ -534,23 +561,34 @@ def run() -> int:
             sync_state = sync_payload.get("sync") or {}
             sync_metadata = {
                 "enabled": True,
+                "configured": True,
+                "ready": True,
                 "status": sync_state.get("status") or sync_payload.get("status"),
                 "attempts": int(sync_state.get("attempts") or 0),
                 "last_attempt_at_utc": sync_state.get("last_attempt_at_utc"),
                 "last_synced_at_utc": sync_state.get("last_synced_at_utc"),
                 "last_error": sync_state.get("last_error"),
+                "disabled_reason": None,
                 "api_base_url": sync_api_url,
-                "endpoint": f"{sync_api_url.rstrip('/')}/machine-runs",
+                "endpoint": build_machine_runs_endpoint(sync_api_url),
                 "last_result": sync_result,
             }
             if sync_result["ok"]:
-                print(f"Synced machine run to backend: {sync_api_url.rstrip('/')}/machine-runs")
+                print(f"Synced machine run to backend: {build_machine_runs_endpoint(sync_api_url)}")
             else:
                 print(f"WARNING: Backend sync failed, pending payload kept for retry: {sync_result['message']}")
         elif args.no_sync:
             print("Backend sync disabled for this run. Leaving pending_sync.json for later retry.")
         elif sync_api_url and not sync_api_key:
-            print("Backend sync URL is set but PILLCOUNT_SYNC_API_KEY is missing. Leaving pending_sync.json for later retry.")
+            print(
+                "Backend sync URL is set but PILLCOUNT_SYNC_API_KEY/--sync-api-key is missing. "
+                "Leaving pending_sync.json for later retry."
+            )
+        elif sync_api_key and not sync_api_url:
+            print(
+                "Backend sync API key is set but PILLCOUNT_SYNC_API_URL/--sync-api-url is missing. "
+                "Leaving pending_sync.json for later retry."
+            )
         else:
             print("Backend sync not configured. Leaving pending_sync.json for later retry.")
 

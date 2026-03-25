@@ -443,6 +443,21 @@ export PILLCOUNT_SYNC_API_URL=http://<api-host>:4000/api
 export PILLCOUNT_SYNC_API_KEY=<api-key>
 ```
 
+`PILLCOUNT_SYNC_API_URL` may be either:
+
+- `http://<api-host>:4000/api`
+- `http://<api-host>:4000/api/machine-runs`
+
+The runtime normalizes both forms to the same sync endpoint.
+
+For local development, the seeded backend credential created by `npm run prisma:seed` is:
+
+```text
+mch_live_seed_key_123456789
+```
+
+If you open `POST /api/machine-runs` directly in a browser or without the `x-api-key` header, `Unauthorized` is expected.
+
 Generate a run and attempt immediate sync:
 
 ```bash
@@ -450,6 +465,14 @@ bash scripts/run_machine_runtime.sh --detector-mode contour --max-frames 300
 ```
 
 If the API is offline or unreachable, the run still completes locally and `runs/run_<timestamp>/pending_sync.json` is kept for retry.
+
+If `summary.json -> sync.enabled` is `false`, inspect:
+
+- `summary.json -> sync.disabled_reason`
+- `summary.json -> sync.api_base_url`
+- `summary.json -> sync.endpoint`
+
+The most common development failure is `sync.disabled_reason = "missing_api_key"`.
 
 Retry pending payloads later:
 
@@ -479,4 +502,4 @@ Verify the sync landed:
 - raw `.pt` loading on the Pi is acceptable for debugging, but exported NCNN is the recommended first validation and deployment path
 - the runtime assumes one stable lane and one dominant direction of motion
 - replay mode is intended for debugging, not for benchmarking real-time camera behavior
-- backend sync is intentionally stubbed as `pending_sync.json` for now
+- backend sync is live, but `pending_sync.json` remains the offline-safe retry artifact

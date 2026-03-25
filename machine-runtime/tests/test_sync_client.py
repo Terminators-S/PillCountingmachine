@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.sync import SyncSettings, sync_pending_payload, sync_pending_payloads
+from src.sync import SyncSettings, build_machine_runs_endpoint, sync_pending_payload, sync_pending_payloads
 
 
 class _FakeResponse:
@@ -99,6 +99,9 @@ class SyncClientTests(unittest.TestCase):
         self.assertEqual("synced", payload["sync"]["status"])
         self.assertEqual(1, payload["sync"]["attempts"])
         self.assertEqual("synced", summary["sync"]["status"])
+        self.assertTrue(summary["sync"]["configured"])
+        self.assertTrue(summary["sync"]["ready"])
+        self.assertIsNone(summary["sync"]["disabled_reason"])
         self.assertEqual("http://localhost:4000/api/machine-runs", summary["sync"]["endpoint"])
 
     def test_sync_pending_payload_failure_preserves_retry_state(self):
@@ -113,6 +116,8 @@ class SyncClientTests(unittest.TestCase):
         self.assertEqual(1, payload["sync"]["attempts"])
         self.assertIn("connection refused", payload["sync"]["last_error"])
         self.assertEqual("sync_failed", summary["sync"]["status"])
+        self.assertTrue(summary["sync"]["configured"])
+        self.assertTrue(summary["sync"]["ready"])
 
     def test_sync_pending_payloads_skips_already_synced_payloads(self):
         payload = json.loads(self.payload_path.read_text(encoding="utf-8"))
@@ -124,6 +129,15 @@ class SyncClientTests(unittest.TestCase):
 
         self.assertEqual(0, result["synced"])
         self.assertEqual(1, result["skipped"])
+
+    def test_build_machine_runs_endpoint_accepts_base_api_url(self):
+        self.assertEqual("http://localhost:4000/api/machine-runs", build_machine_runs_endpoint("http://localhost:4000/api"))
+
+    def test_build_machine_runs_endpoint_accepts_full_machine_runs_url(self):
+        self.assertEqual(
+            "http://172.23.0.168:4000/api/machine-runs",
+            build_machine_runs_endpoint("http://172.23.0.168:4000/api/machine-runs"),
+        )
 
 
 if __name__ == "__main__":

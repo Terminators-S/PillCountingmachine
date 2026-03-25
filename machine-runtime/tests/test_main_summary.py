@@ -8,7 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.config import CameraRuntimeConfig, CountLineConfig, DetectorConfig, RecordingConfig, RoiConfig, TrackerConfig
-from src.main import build_final_summary, build_session_metadata
+from src.main import build_final_summary, build_preflight_sync_metadata, build_session_metadata
 
 
 class BuildFinalSummaryTests(unittest.TestCase):
@@ -115,6 +115,26 @@ class BuildFinalSummaryTests(unittest.TestCase):
         self.assertEqual(3, summary["count_result"]["event_count"])
         self.assertEqual({"tablet": 2, "capsule": 1}, summary["count_result"]["counted_by_label"])
         self.assertEqual([4, 8, 9], summary["count_result"]["counted_track_ids"])
+
+    def test_preflight_sync_metadata_marks_missing_api_key_clearly(self):
+        metadata = build_preflight_sync_metadata("http://172.23.0.168:4000/api", "", False)
+
+        self.assertFalse(metadata["enabled"])
+        self.assertTrue(metadata["configured"])
+        self.assertFalse(metadata["ready"])
+        self.assertEqual("config_missing_api_key", metadata["status"])
+        self.assertEqual("missing_api_key", metadata["disabled_reason"])
+        self.assertEqual("http://172.23.0.168:4000/api/machine-runs", metadata["endpoint"])
+
+    def test_preflight_sync_metadata_accepts_full_machine_runs_endpoint(self):
+        metadata = build_preflight_sync_metadata("http://172.23.0.168:4000/api/machine-runs", "pc_demo_key", False)
+
+        self.assertTrue(metadata["enabled"])
+        self.assertTrue(metadata["configured"])
+        self.assertTrue(metadata["ready"])
+        self.assertEqual("pending_sync", metadata["status"])
+        self.assertIsNone(metadata["disabled_reason"])
+        self.assertEqual("http://172.23.0.168:4000/api/machine-runs", metadata["endpoint"])
 
 
 if __name__ == "__main__":
