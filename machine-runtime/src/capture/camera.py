@@ -68,10 +68,12 @@ def resolve_camera_candidate_indexes(preferred_index: int, max_scan_index: int =
     candidates = [preferred_index]
 
     if sys.platform.startswith("linux"):
-        for device_path in sorted(Path("/dev").glob("video*")):
+        for device_path in sorted(Path("/dev").glob("video*"), key=lambda path: getattr(path, "name", str(path))):
             suffix = device_path.name.removeprefix("video")
             if suffix.isdigit():
-                candidates.append(int(suffix))
+                candidate_index = int(suffix)
+                if candidate_index <= max(0, max_scan_index):
+                    candidates.append(candidate_index)
 
     for index in range(max(0, max_scan_index) + 1):
         candidates.append(index)

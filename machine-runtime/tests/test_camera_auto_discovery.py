@@ -33,6 +33,24 @@ class CameraAutoDiscoveryTests(unittest.TestCase):
         self.assertIn(0, candidates)
         self.assertIn(4, candidates)
 
+    def test_resolve_camera_candidate_indexes_ignores_large_linux_device_indexes(self):
+        class FakeDevicePath:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+        with (
+            patch("src.capture.camera.sys.platform", "linux"),
+            patch(
+                "src.capture.camera.Path.glob",
+                return_value=[FakeDevicePath("video0"), FakeDevicePath("video1"), FakeDevicePath("video23")],
+            ),
+        ):
+            candidates = resolve_camera_candidate_indexes(0, max_scan_index=4)
+
+        self.assertIn(0, candidates)
+        self.assertIn(1, candidates)
+        self.assertNotIn(23, candidates)
+
     def test_open_live_camera_source_falls_back_to_next_available_camera(self):
         config = CameraRuntimeConfig(camera_index=0)
 

@@ -17,6 +17,7 @@ from .capture import (
     open_live_camera_source,
     open_video_file,
     read_frame_from_replay,
+    read_frame_with_timeout,
 )
 from .config import CameraRuntimeConfig, CountingRuntimeConfig, DetectorConfig, load_camera_config, load_counting_config, project_root
 from .counting import LineCounter
