@@ -9,8 +9,10 @@ ENV_FILE="${PILLCOUNT_ENV_FILE:-${DEFAULT_ENV_FILE}}"
 cd "${PROJECT_ROOT}"
 
 if [[ -f "${ENV_FILE}" ]]; then
+  set -a
   # shellcheck disable=SC1090
   source "${ENV_FILE}"
+  set +a
 fi
 
 if [[ ! -d ".venv" ]]; then
