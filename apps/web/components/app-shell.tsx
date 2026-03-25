@@ -63,7 +63,7 @@ const baseNavItems: NavItem[] = [
   { href: '/admin', label: 'Admin', icon: Database, group: 'system', tier: 'secondary' },
   { href: '/settings', label: 'Settings', icon: Cog, group: 'system', tier: 'secondary' },
   { href: '/audit-log', label: 'Audit Log', icon: Shield, group: 'system', tier: 'secondary' },
-  { href: '/notifications', label: 'Notifications', icon: Bell, group: 'system', tier: 'secondary', disabled: true }
+  { href: '/notifications', label: 'Notifications', icon: Bell, group: 'system', tier: 'secondary' }
 ];
 
 function buildInitials(value: string) {
