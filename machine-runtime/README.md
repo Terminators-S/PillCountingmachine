@@ -580,6 +580,10 @@ export PILLCOUNT_LIVE_PREVIEW_INTERVAL_SECONDS=2.0
 export PILLCOUNT_LIVE_PREVIEW_TIMEOUT_SECONDS=15.0
 export PILLCOUNT_LIVE_PREVIEW_MAX_WIDTH=320
 export PILLCOUNT_LIVE_PREVIEW_JPEG_QUALITY=40
+export PILLCOUNT_INFERENCE_SIZE=512
+export PILLCOUNT_SAVE_DEBUG_OVERLAY_FRAMES=0
+export PILLCOUNT_SAVE_CROSSING_EVENT_FRAMES=0
+export PILLCOUNT_MAX_DEBUG_FRAMES=0
 ```
 
 What this does:
@@ -587,6 +591,8 @@ What this does:
 - `POST /api/machine-runtime/:machineCode/telemetry` publishes lightweight runtime telemetry and a JPEG snapshot
 - the Pi display remains the primary local preview
 - the dashboard `/live` page shows the latest machine snapshot and live counts
+- reducing `PILLCOUNT_INFERENCE_SIZE` can improve Pi FPS with a small accuracy tradeoff
+- disabling debug frame writes reduces disk I/O and is the safest performance gain
 
 Verify the website preview:
 

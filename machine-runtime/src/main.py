@@ -19,7 +19,7 @@ from .capture import (
     read_frame_from_replay,
     read_frame_with_timeout,
 )
-from .config import CameraRuntimeConfig, CountingRuntimeConfig, DetectorConfig, load_camera_config, load_counting_config, project_root
+from .config import CameraRuntimeConfig, CountingRuntimeConfig, DetectorConfig, RecordingConfig, load_camera_config, load_counting_config, project_root
 from .counting import LineCounter
 from .inference import build_detector
 from .overlay_ui import (
@@ -307,6 +307,7 @@ def build_final_summary(
 
 def override_counting_config(counting_config: CountingRuntimeConfig, args: argparse.Namespace) -> CountingRuntimeConfig:
     detector_config = {**asdict(counting_config.detector)}
+    recording_config = {**asdict(counting_config.recording)}
     if args.detector_mode:
         detector_config["mode"] = args.detector_mode
     if args.detector_model_key:
@@ -320,12 +321,25 @@ def override_counting_config(counting_config: CountingRuntimeConfig, args: argpa
     if args.detector_inference_size:
         detector_config["inference_size"] = args.detector_inference_size
 
+    if os.environ.get("PILLCOUNT_SAVE_DEBUG_OVERLAY_FRAMES") is not None:
+        recording_config["save_debug_overlay_frames"] = env_truthy(
+            "PILLCOUNT_SAVE_DEBUG_OVERLAY_FRAMES", recording_config["save_debug_overlay_frames"]
+        )
+    if os.environ.get("PILLCOUNT_SAVE_CROSSING_EVENT_FRAMES") is not None:
+        recording_config["save_crossing_event_frames"] = env_truthy(
+            "PILLCOUNT_SAVE_CROSSING_EVENT_FRAMES", recording_config["save_crossing_event_frames"]
+        )
+    if os.environ.get("PILLCOUNT_DEBUG_FRAME_INTERVAL"):
+        recording_config["debug_frame_interval"] = max(1, int(os.environ["PILLCOUNT_DEBUG_FRAME_INTERVAL"]))
+    if os.environ.get("PILLCOUNT_MAX_DEBUG_FRAMES"):
+        recording_config["max_debug_frames"] = max(0, int(os.environ["PILLCOUNT_MAX_DEBUG_FRAMES"]))
+
     return CountingRuntimeConfig(
         roi=counting_config.roi,
         count_line=counting_config.count_line,
         detector=DetectorConfig(**detector_config),
         tracker=counting_config.tracker,
-        recording=counting_config.recording,
+        recording=RecordingConfig(**recording_config),
     )
 
 
