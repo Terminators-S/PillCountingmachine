@@ -122,6 +122,11 @@ def load_export_metadata(model_path: Path) -> dict[str, Any]:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
+        if current_section == "imgsz":
+            match = re.match(r"-\s*(\d+)\s*$", stripped)
+            if match:
+                imgsz.append(int(match.group(1)))
+                continue
         if not line.startswith(" "):
             current_section = stripped[:-1] if stripped.endswith(":") else None
             continue

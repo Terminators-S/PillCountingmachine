@@ -114,7 +114,11 @@ if [[ -n "${PILLCOUNT_DEVICE:-}" ]]; then
 fi
 
 if [[ -n "${PILLCOUNT_INFERENCE_SIZE:-}" ]]; then
-  args+=(--detector-inference-size "${PILLCOUNT_INFERENCE_SIZE}")
+  if [[ -n "${resolved_model_path}" && -d "${resolved_model_path}" && -f "${resolved_model_path}/model.ncnn.param" && -f "${resolved_model_path}/model.ncnn.bin" ]]; then
+    echo "Ignoring PILLCOUNT_INFERENCE_SIZE for NCNN exports; using the export metadata size instead."
+  else
+    args+=(--detector-inference-size "${PILLCOUNT_INFERENCE_SIZE}")
+  fi
 fi
 
 if [[ -n "${PILLCOUNT_SYNC_API_URL:-}" ]]; then
