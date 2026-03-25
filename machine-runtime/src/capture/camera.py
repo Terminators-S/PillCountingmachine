@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import cv2
 
@@ -16,6 +17,14 @@ class CameraSessionInfo:
     actual_height: int
     actual_fps: float
     backend_name: str
+
+
+@dataclass(frozen=True)
+class LiveCameraOpenResult:
+    capture: cv2.VideoCapture | None
+    config: CameraRuntimeConfig
+    first_frame: object | None
+    attempted_indexes: tuple[int, ...]
 
 
 def open_camera(config: CameraRuntimeConfig) -> cv2.VideoCapture:
@@ -53,6 +62,67 @@ def read_frame_from_replay(capture: cv2.VideoCapture):
     if ok and frame is not None and frame.size > 0:
         return frame
     return None
+
+
+def resolve_camera_candidate_indexes(preferred_index: int, max_scan_index: int = 4) -> list[int]:
+    candidates = [preferred_index]
+
+    if sys.platform.startswith("linux"):
+        for device_path in sorted(Path("/dev").glob("video*")):
+            suffix = device_path.name.removeprefix("video")
+            if suffix.isdigit():
+                candidates.append(int(suffix))
+
+    for index in range(max(0, max_scan_index) + 1):
+        candidates.append(index)
+
+    seen: set[int] = set()
+    unique_candidates: list[int] = []
+    for index in candidates:
+        if index < 0 or index in seen:
+            continue
+        seen.add(index)
+        unique_candidates.append(index)
+    return unique_candidates
+
+
+def open_live_camera_source(
+    config: CameraRuntimeConfig,
+    *,
+    explicit_camera_index: bool,
+    max_scan_index: int = 4,
+) -> LiveCameraOpenResult:
+    candidate_indexes = (
+        [config.camera_index]
+        if explicit_camera_index
+        else resolve_camera_candidate_indexes(config.camera_index, max_scan_index=max_scan_index)
+    )
+
+    for index in candidate_indexes:
+        candidate_config = CameraRuntimeConfig(**{**config.__dict__, "camera_index": index})
+        capture = open_camera(candidate_config)
+        if not capture.isOpened():
+            capture.release()
+            continue
+
+        warmup_camera(capture, candidate_config.warmup_frames)
+        first_frame = read_frame_with_timeout(capture, candidate_config.capture_timeout_seconds)
+        if first_frame is not None:
+            return LiveCameraOpenResult(
+                capture=capture,
+                config=candidate_config,
+                first_frame=first_frame,
+                attempted_indexes=tuple(candidate_indexes),
+            )
+
+        capture.release()
+
+    return LiveCameraOpenResult(
+        capture=None,
+        config=config,
+        first_frame=None,
+        attempted_indexes=tuple(candidate_indexes),
+    )
 
 
 def collect_camera_session_info(capture: cv2.VideoCapture, config: CameraRuntimeConfig) -> CameraSessionInfo:

@@ -14,11 +14,9 @@ import numpy as np
 
 from .capture import (
     collect_camera_session_info,
-    open_camera,
+    open_live_camera_source,
     open_video_file,
     read_frame_from_replay,
-    read_frame_with_timeout,
-    warmup_camera,
 )
 from .config import CameraRuntimeConfig, CountingRuntimeConfig, DetectorConfig, load_camera_config, load_counting_config, project_root
 from .counting import LineCounter
@@ -374,14 +372,19 @@ def run() -> int:
         print("ERROR: Use only one of --fullscreen or --windowed.")
         return 1
 
+    explicit_camera_index = args.camera_index is not None
+    requested_camera_index = camera_config.camera_index
     if args.camera_index is not None:
         camera_config = CameraRuntimeConfig(**{**asdict(camera_config), "camera_index": args.camera_index})
+        requested_camera_index = args.camera_index
 
     source_mode = "live_camera"
-    source_label = f"camera:{camera_config.camera_index}"
+    source_label = f"camera:{requested_camera_index}"
     runtime_status = "INITIALIZING"
     exit_reason = "completed"
     camera_state = "camera connected"
+    first_frame = None
+    attempted_camera_indexes: tuple[int, ...] = ()
 
     if args.input_video:
         input_video = Path(args.input_video)
@@ -394,13 +397,24 @@ def run() -> int:
         camera_config = CameraRuntimeConfig(**{**asdict(camera_config), "camera_index": -1})
         capture = open_video_file(str(input_video))
     else:
-        capture = open_camera(camera_config)
+        camera_open_result = open_live_camera_source(camera_config, explicit_camera_index=explicit_camera_index)
+        capture = camera_open_result.capture
+        camera_config = camera_open_result.config
+        first_frame = camera_open_result.first_frame
+        attempted_camera_indexes = camera_open_result.attempted_indexes
+        source_label = f"camera:{camera_config.camera_index}"
 
-    if not capture.isOpened():
+    if capture is None or not capture.isOpened():
         if source_mode == "replay":
             print(f"ERROR: Could not open replay clip: {source_label}")
         else:
-            print(f"ERROR: Could not open camera index {camera_config.camera_index}.")
+            if explicit_camera_index:
+                print(f"ERROR: Could not open camera index {requested_camera_index}.")
+            elif attempted_camera_indexes:
+                attempted = ", ".join(str(index) for index in attempted_camera_indexes)
+                print(f"ERROR: Could not open any available camera. Attempted indexes: {attempted}.")
+            else:
+                print(f"ERROR: Could not open camera index {camera_config.camera_index}.")
             print("Run bash scripts/list_cameras.sh and try a different --camera-index.")
         return 1
 
@@ -412,8 +426,11 @@ def run() -> int:
     window_name = camera_config.display_window_name
     try:
         if source_mode == "live_camera":
-            warmup_camera(capture, camera_config.warmup_frames)
-            first_frame = read_frame_with_timeout(capture, camera_config.capture_timeout_seconds)
+            if not explicit_camera_index and camera_config.camera_index != requested_camera_index:
+                print(
+                    f"Configured camera index {requested_camera_index} unavailable. "
+                    f"Falling back to camera index {camera_config.camera_index}."
+                )
         else:
             first_frame = read_frame_from_replay(capture)
 
@@ -421,7 +438,13 @@ def run() -> int:
             if source_mode == "replay":
                 print("ERROR: Replay clip opened but no frame was read.")
             else:
-                print("ERROR: Camera opened but no valid frame was captured.")
+                if explicit_camera_index:
+                    print(f"ERROR: Camera index {camera_config.camera_index} opened but no valid frame was captured.")
+                elif attempted_camera_indexes:
+                    attempted = ", ".join(str(index) for index in attempted_camera_indexes)
+                    print(f"ERROR: No valid frame was captured from available cameras. Attempted indexes: {attempted}.")
+                else:
+                    print("ERROR: Camera opened but no valid frame was captured.")
             return 1
 
         validate_roi(counting_config.roi, first_frame.shape)
