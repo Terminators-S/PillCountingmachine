@@ -190,6 +190,11 @@ class RemoteMachineAgent:
         self.current_message = "Stopped machine runtime from remote command."
         self.last_error = ""
 
+    def shutdown(self, reason: str = "Stopping remote machine agent.") -> None:
+        self.current_message = reason
+        if self.is_running():
+            self.stop_runtime(self.applied_command_version)
+
     def _apply_runtime_overrides(self, env: dict[str, str], config: dict[str, Any]) -> None:
         camera_index = config.get("cameraIndex")
         model_key = config.get("modelKey")
@@ -232,24 +237,29 @@ def run_remote_machine_agent(settings: MachineControlSettings, *, start_command:
     print(f"Remote machine agent online for {settings.machine_code}")
     print(f"Heartbeat endpoint: {settings.heartbeat_endpoint}")
 
-    while True:
-        agent.refresh_process_state()
+    try:
+        while True:
+            agent.refresh_process_state()
 
-        try:
-            response = post_machine_runtime_control_heartbeat(agent.build_payload(), settings)
-        except KeyboardInterrupt:
-            raise
-        except Exception as exc:
-            print(f"WARNING: Remote control heartbeat failed: {exc}")
+            try:
+                response = post_machine_runtime_control_heartbeat(agent.build_payload(), settings)
+            except KeyboardInterrupt:
+                raise
+            except Exception as exc:
+                print(f"WARNING: Remote control heartbeat failed: {exc}")
+                time.sleep(max(0.5, float(settings.poll_interval_seconds)))
+                continue
+
+            desired_state = str(response.get("desiredState") or "IDLE").strip().upper()
+            command_version = int(response.get("commandVersion") or 0)
+            config = response.get("config")
+            config_dict = config if isinstance(config, dict) else {}
+
+            if command_version > agent.applied_command_version:
+                agent.apply_command(desired_state, command_version, config_dict)
+
             time.sleep(max(0.5, float(settings.poll_interval_seconds)))
-            continue
-
-        desired_state = str(response.get("desiredState") or "IDLE").strip().upper()
-        command_version = int(response.get("commandVersion") or 0)
-        config = response.get("config")
-        config_dict = config if isinstance(config, dict) else {}
-
-        if command_version > agent.applied_command_version:
-            agent.apply_command(desired_state, command_version, config_dict)
-
-        time.sleep(max(0.5, float(settings.poll_interval_seconds)))
+    except KeyboardInterrupt:
+        print("Stopping remote machine agent...")
+        agent.shutdown("Agent interrupted by operator.")
+        return 130
