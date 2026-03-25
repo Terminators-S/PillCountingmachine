@@ -4,8 +4,10 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
-  OnModuleDestroy
+  OnModuleDestroy,
+  ServiceUnavailableException
 } from '@nestjs/common';
+import { MachineRuntimeCommandStatus, MachineRuntimeDesiredState, MachineStatus, Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { ChildProcessWithoutNullStreams, spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -31,10 +33,15 @@ import { EventsService } from '../events/events.service';
 import { LiveEventsService } from '../live/live-events.service';
 import { MachinesService } from '../machines/machines.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { HeartbeatMachineRuntimeControlDto } from './dto/heartbeat-machine-runtime-control.dto';
+import { IngestMachineRuntimeTelemetryDto } from './dto/ingest-machine-runtime-telemetry.dto';
 import { StartMachineRuntimeDto } from './dto/start-machine-runtime.dto';
+import { StopMachineRuntimeDto } from './dto/stop-machine-runtime.dto';
 import {
   BridgeMessage,
+  MachineCameraState,
   MachineRuntimeCameraSource,
+  MachineRuntimeControlState,
   MachineRuntimeCounts,
   MachineRuntimeModelCatalog,
   MachineRuntimeState,
@@ -62,12 +69,38 @@ interface RuntimeSummaryExportContext {
   recentEvents: RuntimeSummaryExportEvent[];
 }
 
+interface RuntimeRequestContext {
+  requestedByUserId?: string | null;
+}
+
+interface RemoteControlHeartbeatContext {
+  ip?: string;
+  userAgent?: string;
+  apiKeyId?: string | null;
+}
+
+export interface RemoteControlSnapshot {
+  machineCode: string;
+  desiredState: MachineRuntimeDesiredState;
+  commandVersion: number;
+  status: MachineRuntimeCommandStatus;
+  config: Record<string, unknown> | null;
+  requestedAt: string | null;
+  appliedCommandVersion: number;
+  appliedAt: string | null;
+  lastError: string | null;
+  agentHeartbeatAt: string | null;
+  agentRuntimeState: string | null;
+  agentMessage: string | null;
+}
+
 @Injectable()
 export class RuntimeService implements OnModuleDestroy {
   private readonly logger = new Logger(RuntimeService.name);
   private readonly runtimeStates = new Map<string, MachineRuntimeState>();
   private readonly processContexts = new Map<string, RuntimeProcessContext>();
   private readonly heartbeatPersistIntervalMs: number;
+  private readonly agentOfflineThresholdMs: number;
   private readonly defaultLocation: string;
   private readonly defaultFirmwareVersion: string;
   private readonly defaultMlProjectPath: string;
@@ -82,6 +115,7 @@ export class RuntimeService implements OnModuleDestroy {
     private readonly liveEvents: LiveEventsService
   ) {
     this.heartbeatPersistIntervalMs = Number(this.configService.get('MACHINE_RUNTIME_HEARTBEAT_MS') || 5000);
+    this.agentOfflineThresholdMs = Number(this.configService.get('MACHINE_RUNTIME_AGENT_OFFLINE_MS') || 15000);
     this.defaultLocation = String(this.configService.get('MACHINE_RUNTIME_DEFAULT_LOCATION') || 'Vision Counter Line');
     this.defaultFirmwareVersion = String(this.configService.get('MACHINE_RUNTIME_DEFAULT_FIRMWARE') || 'ml-vision-1.0.0');
     this.defaultMlProjectPath = String(this.configService.get('ML_PROJECT_PATH') || 'H:\\ONEDRIVE LINK\\Pill_Counter_Machine');
@@ -184,6 +218,200 @@ export class RuntimeService implements OnModuleDestroy {
     }
 
     return Buffer.from(match[1], 'base64');
+  }
+
+  async ingestRemoteTelemetry(
+    machineCode: string,
+    input: IngestMachineRuntimeTelemetryDto,
+    _context: { ip?: string; userAgent?: string }
+  ): Promise<MachineRuntimeStateSummary> {
+    const normalizedCode = machineCode.trim();
+    if (!normalizedCode) {
+      throw new BadRequestException({ code: 'MACHINE_CODE_REQUIRED', message: 'Machine code is required' });
+    }
+
+    const emittedAt = this.normalizeTimestamp(input.emitted_at_utc || input.ended_at_utc || input.started_at_utc);
+    const location = this.readString(input.location) || this.defaultLocation;
+    const firmwareVersion = this.readString(input.firmware_version) || this.defaultFirmwareVersion;
+    const displayName = this.readString(input.display_name) || this.readString(input.machine_name) || null;
+
+    const machine = await this.prisma.machine.upsert({
+      where: { machineCode: normalizedCode },
+      update: {
+        displayName,
+        location,
+        firmwareVersion,
+        status: 'ONLINE',
+        lastSeen: new Date(emittedAt)
+      },
+      create: {
+        machineCode: normalizedCode,
+        displayName,
+        location,
+        firmwareVersion,
+        status: 'ONLINE',
+        lastSeen: new Date(emittedAt)
+      }
+    });
+
+    const state = this.ensureState(normalizedCode, machine);
+    const nextControlState = this.normalizeRemoteControlState(input.control_state, input.ended_at_utc, input.latest_error);
+    const nextCameraState = this.normalizeRemoteCameraState(input.camera_state, nextControlState);
+    const nextSessionId = this.readString(input.session_id) || state.sessionId || `remote-${normalizedCode}`;
+
+    state.displayName = displayName ?? state.displayName;
+    state.location = location;
+    state.firmwareVersion = firmwareVersion;
+    state.sessionId = nextSessionId;
+    state.controlState = nextControlState;
+    state.cameraState = nextCameraState;
+    state.startedAt = this.readString(input.started_at_utc) || state.startedAt || emittedAt;
+    state.endedAt = this.readString(input.ended_at_utc) || (nextControlState === 'RUNNING' ? null : state.endedAt || emittedAt);
+    state.lastHeartbeatAt = emittedAt;
+    state.lastTelemetryAt = emittedAt;
+    state.cameraIndex = this.readInteger(input.camera_index) ?? state.cameraIndex;
+    state.frameWidth = this.readInteger(input.frame_width) ?? state.frameWidth;
+    state.frameHeight = this.readInteger(input.frame_height) ?? state.frameHeight;
+    state.frameNumber = this.readInteger(input.frame_number) ?? state.frameNumber;
+    state.trackedObjectCount = this.readInteger(input.tracked_object_count) ?? state.trackedObjectCount;
+    state.fps = this.readFloat(input.fps) ?? state.fps;
+    state.averageConfidence = this.readFloat(input.average_confidence) ?? state.averageConfidence;
+    state.modelKey = this.readString(input.model_key) || state.modelKey;
+    state.modelName = this.readString(input.model_name) || state.modelName || state.modelKey;
+    state.modelProvider = this.readString(input.model_provider) || state.modelProvider || 'local';
+    state.modelPath = this.readString(input.model_path) || state.modelPath;
+
+    if (input.visible_counts) {
+      state.visibleCounts = this.normalizeCounts(input.visible_counts);
+    }
+
+    if (input.cumulative_counts) {
+      state.cumulativeCounts = this.normalizeCounts(input.cumulative_counts);
+    }
+
+    const latestError = this.readString(input.latest_error);
+    state.latestError = latestError || (nextControlState === 'ERROR' ? state.latestError || 'Remote runtime error.' : null);
+    state.latestMessage =
+      this.readString(input.message) ||
+      (nextControlState === 'RUNNING'
+        ? `Visible ${state.visibleCounts.total} item(s)`
+        : nextControlState === 'ERROR'
+          ? state.latestError || 'Remote runtime error.'
+          : 'Remote runtime session finished.');
+
+    const snapshotDataUrl = this.readString(input.snapshot_data_url);
+    if (snapshotDataUrl) {
+      state.snapshotDataUrl = snapshotDataUrl;
+      state.snapshotUpdatedAt = emittedAt;
+    }
+
+    this.liveEvents.publish('machine.status.changed', {
+      machineCode: normalizedCode,
+      status: 'ONLINE',
+      lastSeen: emittedAt
+    });
+    this.publishRuntimeUpdate('machine.runtime.remote.telemetry', state);
+    return this.toSummary(state);
+  }
+
+  async heartbeatRemoteControl(
+    machineCode: string,
+    input: HeartbeatMachineRuntimeControlDto,
+    _context: RemoteControlHeartbeatContext
+  ): Promise<RemoteControlSnapshot> {
+    const normalizedCode = machineCode.trim();
+    if (!normalizedCode) {
+      throw new BadRequestException({ code: 'MACHINE_CODE_REQUIRED', message: 'Machine code is required' });
+    }
+
+    const occurredAt = new Date();
+    const occurredAtIso = occurredAt.toISOString();
+    const machine = await this.prisma.machine.upsert({
+      where: { machineCode: normalizedCode },
+      update: {
+        status: MachineStatus.ONLINE,
+        lastSeen: occurredAt
+      },
+      create: {
+        machineCode: normalizedCode,
+        displayName: normalizedCode,
+        location: this.defaultLocation,
+        firmwareVersion: this.defaultFirmwareVersion,
+        status: MachineStatus.ONLINE,
+        lastSeen: occurredAt
+      }
+    });
+
+    const incomingAppliedVersion = this.readInteger(input.applied_command_version);
+    const incomingRuntimeState = this.normalizeRemoteControlState(input.runtime_state, undefined, input.last_error);
+    const incomingMessage = this.readString(input.current_message);
+    const incomingError = this.readString(input.last_error);
+    const incomingPid = this.readInteger(input.active_pid);
+
+    let control = await this.prisma.machineRuntimeControl.upsert({
+      where: { machineCode: normalizedCode },
+      update: {
+        agentHeartbeatAt: occurredAt,
+        agentSessionId: this.readString(input.agent_session_id) || undefined,
+        agentRuntimeState: incomingRuntimeState,
+        agentPid: incomingPid,
+        agentMessage: incomingMessage || undefined,
+        lastError: incomingError || undefined
+      },
+      create: {
+        machineCode: normalizedCode,
+        desiredState: MachineRuntimeDesiredState.IDLE,
+        status: MachineRuntimeCommandStatus.APPLIED,
+        requestedAt: occurredAt,
+        appliedAt: occurredAt,
+        appliedCommandVersion: incomingAppliedVersion ?? 0,
+        agentHeartbeatAt: occurredAt,
+        agentSessionId: this.readString(input.agent_session_id) || null,
+        agentRuntimeState: incomingRuntimeState,
+        agentPid: incomingPid,
+        agentMessage: incomingMessage || null,
+        lastError: incomingError || null
+      }
+    });
+
+    const controlUpdate: Record<string, unknown> = {};
+    if (incomingAppliedVersion !== null && incomingAppliedVersion >= control.commandVersion) {
+      controlUpdate.appliedCommandVersion = incomingAppliedVersion;
+      controlUpdate.appliedAt = occurredAt;
+      controlUpdate.status = incomingError ? MachineRuntimeCommandStatus.FAILED : MachineRuntimeCommandStatus.APPLIED;
+      controlUpdate.lastError = incomingError || null;
+    } else if (incomingError && control.status !== MachineRuntimeCommandStatus.PENDING) {
+      controlUpdate.status = MachineRuntimeCommandStatus.FAILED;
+      controlUpdate.lastError = incomingError;
+    }
+
+    if (Object.keys(controlUpdate).length) {
+      control = await this.prisma.machineRuntimeControl.update({
+        where: { machineCode: normalizedCode },
+        data: controlUpdate
+      });
+    }
+
+    const state = this.ensureState(normalizedCode, {
+      displayName: machine.displayName,
+      location: machine.location,
+      firmwareVersion: machine.firmwareVersion,
+      lastSeen: machine.lastSeen
+    });
+    this.applyRemoteAgentHeartbeat(state, incomingRuntimeState, {
+      message: incomingMessage,
+      error: incomingError,
+      pid: incomingPid,
+      occurredAtIso
+    });
+
+    this.liveEvents.publish('machine.status.changed', {
+      machineCode: normalizedCode,
+      status: 'ONLINE',
+      lastSeen: occurredAtIso
+    });
+    this.publishRuntimeUpdate('machine.runtime.remote.heartbeat', state);
+    return this.toRemoteControlSnapshot(control);
   }
 
   async exportSummaryExcel(machineCode: string): Promise<Buffer> {
@@ -639,7 +867,129 @@ export class RuntimeService implements OnModuleDestroy {
     });
   }
 
-  async start(machineCode: string, input: StartMachineRuntimeDto): Promise<MachineRuntimeState> {
+  private async requestRemoteStart(
+    machineCode: string,
+    input: StartMachineRuntimeDto,
+    context: RuntimeRequestContext
+  ): Promise<MachineRuntimeState> {
+    const normalizedCode = machineCode.trim();
+    if (!normalizedCode) {
+      throw new BadRequestException({ code: 'MACHINE_CODE_REQUIRED', message: 'Machine code is required' });
+    }
+
+    const control = await this.requireRemoteAgentOnline(normalizedCode);
+    const existingMachine = await this.prisma.machine.findUnique({
+      where: { machineCode: normalizedCode }
+    });
+    const catalog = await this.getCatalog();
+    const selectedModelKey = input.modelKey?.trim() || catalog.defaultModelKey;
+    const selectedModel = catalog.models.find((entry) => entry.key === selectedModelKey);
+    if (!selectedModel) {
+      throw new BadRequestException({ code: 'MODEL_KEY_INVALID', message: `Model key not found: ${selectedModelKey}` });
+    }
+
+    const location = input.location?.trim() || existingMachine?.location || this.defaultLocation;
+    const firmwareVersion = input.firmwareVersion?.trim() || existingMachine?.firmwareVersion || this.defaultFirmwareVersion;
+    const displayName = input.displayName?.trim() || existingMachine?.displayName || normalizedCode;
+    await this.machinesService.register({
+      machineCode: normalizedCode,
+      location,
+      firmwareVersion,
+      displayName
+    });
+
+    const nextCommandVersion = control.commandVersion + 1;
+    const requestedAt = new Date();
+    const remoteConfig = this.buildRemoteStartConfig(input);
+    await this.prisma.machineRuntimeControl.update({
+      where: { machineCode: normalizedCode },
+      data: {
+        desiredState: MachineRuntimeDesiredState.RUNNING,
+        commandVersion: nextCommandVersion,
+        status: MachineRuntimeCommandStatus.PENDING,
+        config: remoteConfig as Prisma.InputJsonValue,
+        requestedAt,
+        requestedById: context.requestedByUserId || null,
+        lastError: null
+      }
+    });
+
+    const state = this.ensureState(normalizedCode, {
+      displayName,
+      location,
+      firmwareVersion,
+      lastSeen: requestedAt
+    });
+    state.displayName = displayName;
+    state.location = location;
+    state.firmwareVersion = firmwareVersion;
+    state.controlState = 'STARTING';
+    state.cameraState = 'OPENING';
+    state.startedAt = state.startedAt || requestedAt.toISOString();
+    state.endedAt = null;
+    state.cameraIndex = input.cameraIndex ?? state.cameraIndex;
+    state.modelKey = selectedModel.key;
+    state.modelName = selectedModel.name;
+    state.modelProvider = selectedModel.provider;
+    state.modelPath = selectedModel.path || selectedModel.modelId || selectedModel.key;
+    state.pid = null;
+    state.latestError = null;
+    state.latestMessage = 'Remote start requested from dashboard.';
+    state.visibleCounts = this.createEmptyCounts();
+    this.publishRuntimeUpdate('machine.runtime.remote.start.requested', state);
+    await this.recordMachineEvent(normalizedCode, 'machine.runtime.remote.start.requested', requestedAt.toISOString(), {
+      requestedByUserId: context.requestedByUserId || null,
+      commandVersion: nextCommandVersion,
+      config: remoteConfig
+    });
+    return this.toDetail(state);
+  }
+
+  private async requestRemoteStop(machineCode: string, context: RuntimeRequestContext): Promise<MachineRuntimeState> {
+    const normalizedCode = machineCode.trim();
+    if (!normalizedCode) {
+      throw new BadRequestException({ code: 'MACHINE_CODE_REQUIRED', message: 'Machine code is required' });
+    }
+
+    const control = await this.requireRemoteAgentOnline(normalizedCode);
+    const nextCommandVersion = control.commandVersion + 1;
+    const requestedAt = new Date();
+    await this.prisma.machineRuntimeControl.update({
+      where: { machineCode: normalizedCode },
+      data: {
+        desiredState: MachineRuntimeDesiredState.IDLE,
+        commandVersion: nextCommandVersion,
+        status: MachineRuntimeCommandStatus.PENDING,
+        requestedAt,
+        requestedById: context.requestedByUserId || null,
+        lastError: null
+      }
+    });
+
+    const machine = await this.prisma.machine.findUnique({ where: { machineCode: normalizedCode } });
+    const state = this.ensureState(normalizedCode, machine || undefined);
+    state.controlState = 'STOPPING';
+    state.cameraState = 'CLOSED';
+    state.pid = null;
+    state.visibleCounts = this.createEmptyCounts();
+    state.latestMessage = 'Remote stop requested from dashboard.';
+    this.publishRuntimeUpdate('machine.runtime.remote.stop.requested', state);
+    await this.recordMachineEvent(normalizedCode, 'machine.runtime.remote.stop.requested', requestedAt.toISOString(), {
+      requestedByUserId: context.requestedByUserId || null,
+      commandVersion: nextCommandVersion
+    });
+    return this.toDetail(state);
+  }
+
+  async start(machineCode: string, input: StartMachineRuntimeDto, context: RuntimeRequestContext = {}): Promise<MachineRuntimeState> {
+    if (input.executionMode === 'remote') {
+      return this.requestRemoteStart(machineCode, input, context);
+    }
+
+    return this.startLocal(machineCode, input);
+  }
+
+  private async startLocal(machineCode: string, input: StartMachineRuntimeDto): Promise<MachineRuntimeState> {
     const normalizedCode = machineCode.trim();
     if (!normalizedCode) {
       throw new BadRequestException({ code: 'MACHINE_CODE_REQUIRED', message: 'Machine code is required' });
@@ -853,7 +1203,15 @@ export class RuntimeService implements OnModuleDestroy {
     return this.toDetail(state);
   }
 
-  async stop(machineCode: string): Promise<MachineRuntimeState> {
+  async stop(machineCode: string, input: StopMachineRuntimeDto = {}, context: RuntimeRequestContext = {}): Promise<MachineRuntimeState> {
+    if (input.executionMode === 'remote') {
+      return this.requestRemoteStop(machineCode, context);
+    }
+
+    return this.stopLocal(machineCode);
+  }
+
+  private async stopLocal(machineCode: string): Promise<MachineRuntimeState> {
     const normalizedCode = machineCode.trim();
     const state = this.runtimeStates.get(normalizedCode);
     const context = this.processContexts.get(normalizedCode);
@@ -995,6 +1353,142 @@ export class RuntimeService implements OnModuleDestroy {
       ...this.toSummary(state),
       snapshotDataUrl: state.snapshotDataUrl,
       logTail: [...state.logTail]
+    };
+  }
+
+  private normalizeRemoteControlState(controlState?: string, endedAtUtc?: string, latestError?: string): MachineRuntimeControlState {
+    const normalized = String(controlState || '').trim().toUpperCase();
+    if (normalized === 'IDLE' || normalized === 'STARTING' || normalized === 'RUNNING' || normalized === 'STOPPING' || normalized === 'ERROR') {
+      return normalized;
+    }
+
+    if (this.readString(latestError)) {
+      return 'ERROR';
+    }
+
+    if (this.readString(endedAtUtc)) {
+      return 'IDLE';
+    }
+
+    return 'RUNNING';
+  }
+
+  private normalizeRemoteCameraState(cameraState: string | undefined, controlState: MachineRuntimeControlState): MachineCameraState {
+    const normalized = String(cameraState || '').trim().toUpperCase();
+    if (normalized === 'CLOSED' || normalized === 'OPENING' || normalized === 'OPEN' || normalized === 'ERROR') {
+      return normalized;
+    }
+
+    if (controlState === 'ERROR') {
+      return 'ERROR';
+    }
+
+    if (controlState === 'RUNNING' || controlState === 'STARTING' || controlState === 'STOPPING') {
+      return 'OPEN';
+    }
+
+    return 'CLOSED';
+  }
+
+  private async requireRemoteAgentOnline(machineCode: string) {
+    const control = await this.prisma.machineRuntimeControl.findUnique({
+      where: { machineCode }
+    });
+    if (!control?.agentHeartbeatAt) {
+      throw new ServiceUnavailableException({
+        code: 'REMOTE_AGENT_OFFLINE',
+        message: 'Remote Raspberry Pi agent is offline. Start the Pi control agent first.'
+      });
+    }
+
+    const elapsedMs = Date.now() - control.agentHeartbeatAt.getTime();
+    if (elapsedMs > this.agentOfflineThresholdMs) {
+      throw new ServiceUnavailableException({
+        code: 'REMOTE_AGENT_OFFLINE',
+        message: 'Remote Raspberry Pi agent heartbeat is stale. Check the Pi control agent service.'
+      });
+    }
+
+    return control;
+  }
+
+  private buildRemoteStartConfig(input: StartMachineRuntimeDto): Record<string, unknown> {
+    return {
+      cameraIndex: input.cameraIndex ?? null,
+      modelKey: input.modelKey?.trim() || null,
+      displayName: input.displayName?.trim() || null,
+      location: input.location?.trim() || null,
+      firmwareVersion: input.firmwareVersion?.trim() || null
+    };
+  }
+
+  private applyRemoteAgentHeartbeat(
+    state: MachineRuntimeState,
+    runtimeState: MachineRuntimeControlState,
+    input: { message?: string; error?: string; pid?: number | null; occurredAtIso: string }
+  ) {
+    state.controlState = runtimeState;
+    state.cameraState = this.normalizeRemoteCameraState(undefined, runtimeState);
+    state.lastHeartbeatAt = input.occurredAtIso;
+    state.pid = input.pid ?? null;
+    if (runtimeState === 'IDLE' || runtimeState === 'STOPPING' || runtimeState === 'ERROR') {
+      state.visibleCounts = this.createEmptyCounts();
+      state.frameNumber = runtimeState === 'ERROR' ? state.frameNumber : 0;
+      state.trackedObjectCount = runtimeState === 'ERROR' ? state.trackedObjectCount : 0;
+      state.fps = runtimeState === 'ERROR' ? state.fps : null;
+      state.averageConfidence = runtimeState === 'ERROR' ? state.averageConfidence : null;
+      if (runtimeState !== 'STOPPING') {
+        state.endedAt = state.endedAt || input.occurredAtIso;
+      }
+    } else if (runtimeState === 'STARTING' || runtimeState === 'RUNNING') {
+      state.startedAt = state.startedAt || input.occurredAtIso;
+      state.endedAt = null;
+    }
+
+    if (input.error) {
+      state.latestError = input.error;
+      state.latestMessage = input.error;
+    } else {
+      state.latestError = runtimeState === 'ERROR' ? state.latestError : null;
+      if (input.message) {
+        state.latestMessage = input.message;
+      } else if (runtimeState === 'IDLE') {
+        state.latestMessage = 'Remote Raspberry Pi agent is online.';
+      } else if (runtimeState === 'STARTING') {
+        state.latestMessage = 'Remote machine runtime is starting.';
+      } else if (runtimeState === 'STOPPING') {
+        state.latestMessage = 'Remote machine runtime is stopping.';
+      }
+    }
+  }
+
+  private toRemoteControlSnapshot(control: {
+    machineCode: string;
+    desiredState: MachineRuntimeDesiredState;
+    commandVersion: number;
+    status: MachineRuntimeCommandStatus;
+    config: unknown;
+    requestedAt: Date;
+    appliedCommandVersion: number;
+    appliedAt: Date | null;
+    lastError: string | null;
+    agentHeartbeatAt: Date | null;
+    agentRuntimeState: string | null;
+    agentMessage: string | null;
+  }): RemoteControlSnapshot {
+    return {
+      machineCode: control.machineCode,
+      desiredState: control.desiredState,
+      commandVersion: control.commandVersion,
+      status: control.status,
+      config: control.config && typeof control.config === 'object' && !Array.isArray(control.config) ? (control.config as Record<string, unknown>) : null,
+      requestedAt: control.requestedAt?.toISOString?.() || null,
+      appliedCommandVersion: control.appliedCommandVersion,
+      appliedAt: control.appliedAt?.toISOString?.() || null,
+      lastError: control.lastError,
+      agentHeartbeatAt: control.agentHeartbeatAt?.toISOString?.() || null,
+      agentRuntimeState: control.agentRuntimeState,
+      agentMessage: control.agentMessage
     };
   }
 

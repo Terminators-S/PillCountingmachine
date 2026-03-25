@@ -1,7 +1,14 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+
+const EXECUTION_MODES = ['local', 'remote'] as const;
 
 export class StartMachineRuntimeDto {
+  @IsOptional()
+  @IsString()
+  @IsIn(EXECUTION_MODES)
+  executionMode?: 'local' | 'remote';
+
   @IsOptional()
   @IsString()
   @MaxLength(120)

@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { StartMachineRuntimeDto } from './dto/start-machine-runtime.dto';
+import { StopMachineRuntimeDto } from './dto/stop-machine-runtime.dto';
 import { RuntimeService } from './runtime.service';
 
 @Controller('machine-runtime')
@@ -31,14 +32,14 @@ export class RuntimeController {
 
   @Post(':machineCode/start')
   @Roles('ADMIN', 'SUPERVISOR', 'OPERATOR')
-  start(@Param('machineCode') machineCode: string, @Body() input: StartMachineRuntimeDto) {
-    return this.runtimeService.start(machineCode, input);
+  start(@Param('machineCode') machineCode: string, @Body() input: StartMachineRuntimeDto, @Req() req: any) {
+    return this.runtimeService.start(machineCode, input, { requestedByUserId: req.user?.sub });
   }
 
   @Post(':machineCode/stop')
   @Roles('ADMIN', 'SUPERVISOR', 'OPERATOR')
-  stop(@Param('machineCode') machineCode: string) {
-    return this.runtimeService.stop(machineCode);
+  stop(@Param('machineCode') machineCode: string, @Body() input: StopMachineRuntimeDto, @Req() req: any) {
+    return this.runtimeService.stop(machineCode, input, { requestedByUserId: req.user?.sub });
   }
 
   @Get(':machineCode/export/summary.xlsx')

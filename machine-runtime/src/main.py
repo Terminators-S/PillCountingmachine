@@ -33,6 +33,12 @@ from .overlay_ui import (
     validate_roi,
 )
 from .sync import SyncSettings, build_machine_runs_endpoint, build_pending_sync_payload, sync_pending_payload, write_pending_sync_payload
+from .sync import (
+    LiveRuntimePublisher,
+    build_runtime_preview_settings,
+    build_runtime_telemetry_payload,
+    encode_preview_frame_as_data_url,
+)
 from .storage import RunRecorder
 from .tracking import CentroidTracker, TrackedObject
 
@@ -155,6 +161,32 @@ def draw_status_panel(
         y = 38 + (index * line_height)
         cv2.putText(frame, line, (24, y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (16, 16, 16), 4)
         cv2.putText(frame, line, (24, y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), 1)
+
+
+def env_truthy(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def runtime_status_to_control_state(runtime_status: str) -> str:
+    normalized = str(runtime_status or "").strip().upper()
+    if normalized in {"RUNNING", "REPLAYING"}:
+        return "RUNNING"
+    if normalized == "STOPPING":
+        return "STOPPING"
+    if normalized == "ERROR":
+        return "ERROR"
+    return "IDLE"
+
+
+def camera_state_to_runtime_camera_state(control_state: str) -> str:
+    if control_state == "ERROR":
+        return "ERROR"
+    if control_state in {"RUNNING", "STARTING", "STOPPING"}:
+        return "OPEN"
+    return "CLOSED"
 
 
 def build_session_metadata(
@@ -420,6 +452,26 @@ def run() -> int:
         recorder = RunRecorder(project_root() / camera_config.run_output_dir, run_id, counting_config.recording, session_metadata)
         recorder.initialize()
 
+        sync_api_url = (args.sync_api_url or os.environ.get("PILLCOUNT_SYNC_API_URL") or "").strip()
+        sync_api_key = (args.sync_api_key or os.environ.get("PILLCOUNT_SYNC_API_KEY") or "").strip()
+        sync_timeout_value = args.sync_timeout_seconds or float(os.environ.get("PILLCOUNT_SYNC_TIMEOUT_SECONDS") or 10.0)
+        live_preview_enabled = env_truthy("PILLCOUNT_LIVE_PREVIEW_ENABLED", True)
+        live_preview_interval = float(os.environ.get("PILLCOUNT_LIVE_PREVIEW_INTERVAL_SECONDS") or 1.5)
+        live_preview_timeout = float(os.environ.get("PILLCOUNT_LIVE_PREVIEW_TIMEOUT_SECONDS") or min(sync_timeout_value, 1.5))
+        live_preview_max_width = int(os.environ.get("PILLCOUNT_LIVE_PREVIEW_MAX_WIDTH") or 640)
+        live_preview_quality = int(os.environ.get("PILLCOUNT_LIVE_PREVIEW_JPEG_QUALITY") or 60)
+        runtime_machine_code = (os.environ.get("PILLCOUNT_MACHINE_CODE") or camera_config.machine_name).strip()
+        live_preview_settings = None
+        if not args.no_sync and live_preview_enabled:
+            live_preview_settings = build_runtime_preview_settings(
+                sync_api_url,
+                sync_api_key,
+                runtime_machine_code,
+                timeout_seconds=live_preview_timeout,
+                publish_interval_seconds=live_preview_interval,
+            )
+        live_runtime_publisher = LiveRuntimePublisher(live_preview_settings) if live_preview_settings else None
+
         print("Starting isolated machine MVP counting loop with configuration:")
         print(json.dumps(session_metadata, indent=2))
 
@@ -495,6 +547,41 @@ def run() -> int:
 
                 recorder.maybe_save_debug_frame(overlay, frame_index)
 
+                if live_runtime_publisher and live_runtime_publisher.should_publish():
+                    visible_counts_by_label = Counter(detection.label for detection in detections)
+                    cumulative_counts_by_label = Counter(event.object_label for event in line_counter.events)
+                    average_confidence = 0.0 if not detections else sum(float(detection.confidence) for detection in detections) / len(detections)
+                    snapshot_data_url = encode_preview_frame_as_data_url(
+                        overlay,
+                        max_width=live_preview_max_width,
+                        jpeg_quality=live_preview_quality,
+                    )
+                    live_runtime_publisher.publish(
+                        build_runtime_telemetry_payload(
+                            machine_code=runtime_machine_code,
+                            machine_name=camera_config.machine_name,
+                            session_id=run_id,
+                            emitted_at_utc=utc_now_iso(),
+                            started_at_utc=started_at_utc,
+                            ended_at_utc=None,
+                            control_state=runtime_status_to_control_state(runtime_status),
+                            camera_state=camera_state_to_runtime_camera_state(runtime_status_to_control_state(runtime_status)),
+                            camera_index=camera_info.camera_index,
+                            frame_width=camera_info.actual_width,
+                            frame_height=camera_info.actual_height,
+                            frame_number=frame_index,
+                            tracked_object_count=len(tracks),
+                            fps=fps,
+                            average_confidence=average_confidence,
+                            detector_info=detector_info,
+                            visible_counts_by_label=visible_counts_by_label,
+                            cumulative_counts_by_label=cumulative_counts_by_label,
+                            message=last_status,
+                            latest_error=None,
+                            snapshot_data_url=snapshot_data_url,
+                        )
+                    )
+
                 if show_preview:
                     cv2.imshow(window_name, overlay)
                     key = cv2.waitKey(1) & 0xFF
@@ -548,9 +635,50 @@ def run() -> int:
         saved_summary = recorder.finalize(final_summary)
         sync_payload = build_pending_sync_payload(session_metadata, saved_summary, line_counter.events)
         pending_sync_path = write_pending_sync_payload(recorder.run_dir, sync_payload)
-        sync_api_url = (args.sync_api_url or os.environ.get("PILLCOUNT_SYNC_API_URL") or "").strip()
-        sync_api_key = (args.sync_api_key or os.environ.get("PILLCOUNT_SYNC_API_KEY") or "").strip()
-        sync_timeout_value = args.sync_timeout_seconds or float(os.environ.get("PILLCOUNT_SYNC_TIMEOUT_SECONDS") or 10.0)
+
+        if live_runtime_publisher:
+            final_control_state = runtime_status_to_control_state(runtime_status)
+            final_snapshot_url = None
+            latest_debug_frame = saved_summary.get("debug_frame_paths") or []
+            if latest_debug_frame:
+                try:
+                    final_debug_frame = cv2.imread(str(latest_debug_frame[-1]))
+                    final_snapshot_url = encode_preview_frame_as_data_url(
+                        final_debug_frame,
+                        max_width=live_preview_max_width,
+                        jpeg_quality=live_preview_quality,
+                    )
+                except Exception:
+                    final_snapshot_url = None
+
+            live_runtime_publisher.publish(
+                build_runtime_telemetry_payload(
+                    machine_code=runtime_machine_code,
+                    machine_name=camera_config.machine_name,
+                    session_id=run_id,
+                    emitted_at_utc=utc_now_iso(),
+                    started_at_utc=started_at_utc,
+                    ended_at_utc=saved_summary.get("completed_at_utc"),
+                    control_state=final_control_state,
+                    camera_state=camera_state_to_runtime_camera_state(final_control_state),
+                    camera_index=camera_info.camera_index,
+                    frame_width=camera_info.actual_width,
+                    frame_height=camera_info.actual_height,
+                    frame_number=frame_index,
+                    tracked_object_count=0,
+                    fps=average_fps,
+                    average_confidence=None,
+                    detector_info=detector_info,
+                    visible_counts_by_label={},
+                    cumulative_counts_by_label=saved_summary.get("counted_by_label") or {},
+                    message=saved_summary.get("status_text") or last_status,
+                    latest_error=saved_summary.get("status_text") if runtime_status == "ERROR" else None,
+                    snapshot_data_url=final_snapshot_url,
+                ),
+                force=True,
+            )
+            live_runtime_publisher.close(flush=True)
+
         sync_metadata = build_preflight_sync_metadata(sync_api_url, sync_api_key, args.no_sync)
         if not args.no_sync and sync_api_url and sync_api_key:
             sync_result = sync_pending_payload(

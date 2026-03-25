@@ -669,6 +669,7 @@ export default function LiveDashboardPage() {
       return apiRequest<MachineRuntimeState>(`/machine-runtime/${encodeURIComponent(machineCode)}/start`, {
         method: 'POST',
         body: JSON.stringify({
+          executionMode: 'remote',
           displayName: form.displayName || undefined,
           location: form.location || undefined,
           firmwareVersion: form.firmwareVersion || undefined,
@@ -696,7 +697,10 @@ export default function LiveDashboardPage() {
 
   const stopSession = useMutation({
     mutationFn: async (machineCode: string) =>
-      apiRequest<MachineRuntimeState>(`/machine-runtime/${encodeURIComponent(machineCode)}/stop`, { method: 'POST' }),
+      apiRequest<MachineRuntimeState>(`/machine-runtime/${encodeURIComponent(machineCode)}/stop`, {
+        method: 'POST',
+        body: JSON.stringify({ executionMode: 'remote' })
+      }),
     onSuccess: async () => {
       await refreshRuntime();
     }
@@ -720,6 +724,12 @@ export default function LiveDashboardPage() {
       ? exportExcel.error.message
       : exportWord.error instanceof Error
         ? exportWord.error.message
+        : '';
+  const controlErrorMessage =
+    startSession.error instanceof Error
+      ? startSession.error.message
+      : stopSession.error instanceof Error
+        ? stopSession.error.message
         : '';
 
   return (
@@ -877,9 +887,9 @@ export default function LiveDashboardPage() {
           ) : null}
         </div>
 
-        {startSession.error instanceof Error ? (
+        {controlErrorMessage ? (
           <div className='mt-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700'>
-            {startSession.error.message}
+            {controlErrorMessage}
           </div>
         ) : null}
       </section>

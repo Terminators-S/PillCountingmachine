@@ -23,6 +23,17 @@ enum MachineStatus {
   UNKNOWN
 }
 
+enum MachineRuntimeDesiredState {
+  IDLE
+  RUNNING
+}
+
+enum MachineRuntimeCommandStatus {
+  PENDING
+  APPLIED
+  FAILED
+}
+
 enum InventoryTxnType {
   RECEIVE
   DISPENSE
@@ -66,6 +77,7 @@ model User {
   inventoryOps    InventoryTransaction[] @relation("InventoryOperator")
   inventoryApprovals InventoryTransaction[] @relation("InventoryApprover")
   apiKeysCreated  ApiKey[]           @relation("ApiKeyCreatedBy")
+  runtimeCommands MachineRuntimeControl[] @relation("MachineRuntimeControlRequestedBy")
   cycleCountSessions CycleCountSession[]
   auditLogs       AuditLog[]
 }
@@ -134,10 +146,37 @@ model Machine {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
   events          MachineEvent[]
+  runtimeControl  MachineRuntimeControl?
   jobs            CountingJob[]
   inventoryTransactions InventoryTransaction[]
 
   @@index([status, lastSeen])
+}
+
+model MachineRuntimeControl {
+  id                    String                      @id @default(uuid())
+  machineCode           String                      @unique
+  desiredState          MachineRuntimeDesiredState  @default(IDLE)
+  commandVersion        Int                         @default(0)
+  status                MachineRuntimeCommandStatus @default(APPLIED)
+  config                Json?
+  requestedAt           DateTime                    @default(now())
+  requestedById         String?
+  appliedCommandVersion Int                         @default(0)
+  appliedAt             DateTime?
+  lastError             String?
+  agentHeartbeatAt      DateTime?
+  agentSessionId        String?
+  agentRuntimeState     String?
+  agentPid              Int?
+  agentMessage          String?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  machine               Machine                     @relation(fields: [machineCode], references: [machineCode], onDelete: Cascade)
+  requestedBy           User?                       @relation("MachineRuntimeControlRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@index([desiredState, status])
+  @@index([agentHeartbeatAt])
 }
 
 model MachineEvent {

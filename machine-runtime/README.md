@@ -22,6 +22,7 @@ machine-runtime/
   config/
     camera.default.json
     counting.default.json
+    pi-machine.env.example
   logs/
     captures/
     runs/
@@ -29,6 +30,7 @@ machine-runtime/
   models/                      Reserved for future model artifacts
   samples/                     Reserved for real machine samples
   scripts/
+    install_pi_service.sh
     list_cameras.sh
     pi_setup.sh
     run_camera_capture_test.sh
@@ -36,6 +38,7 @@ machine-runtime/
     run_machine_runtime.sh
     run_replay_clip.sh
     setup_venv.sh
+    start_machine.sh
   src/
     capture/
     config/
@@ -216,6 +219,74 @@ Compatibility alias:
 ```bash
 bash scripts/run_counting_mvp.sh --max-frames 300
 ```
+
+### 5c. Daily machine launch on the Pi
+
+For repeatable day-to-day startup, create a local machine env file:
+
+```bash
+cp config/pi-machine.env.example config/pi-machine.env
+```
+
+Then edit `config/pi-machine.env` and fill in:
+
+- `PILLCOUNT_SYNC_API_URL`
+- `PILLCOUNT_SYNC_API_KEY`
+- `PILLCOUNT_MACHINE_CODE`
+- the correct model path if you moved the export artifact
+
+To mirror the Pi camera preview into the website live dashboard as well, keep these enabled in the same env file:
+
+- `PILLCOUNT_LIVE_PREVIEW_ENABLED=1`
+- `PILLCOUNT_LIVE_PREVIEW_INTERVAL_SECONDS=1.5`
+- `PILLCOUNT_LIVE_PREVIEW_MAX_WIDTH=640`
+- `PILLCOUNT_LIVE_PREVIEW_JPEG_QUALITY=60`
+
+Daily start command:
+
+```bash
+bash scripts/start_machine.sh
+```
+
+The launcher:
+
+- loads `config/pi-machine.env` when present
+- exports the Pi display variables for the attached screen
+- defaults to `local-train12` NCNN when that export exists
+- publishes machine snapshot frames to the backend when sync URL and API key are configured
+- keeps every option overrideable by env vars or extra CLI flags
+
+Example headless replay:
+
+```bash
+PILLCOUNT_PREVIEW=0 PILLCOUNT_INPUT_VIDEO=datasets/test-clips/example.mp4 bash scripts/start_machine.sh
+```
+
+### 5d. Optional systemd service on the Pi
+
+If you want the machine runtime to restart automatically after boot or failure:
+
+```bash
+sudo bash scripts/install_pi_service.sh --user "$USER"
+```
+
+This installs a service that runs `scripts/start_machine.sh` and reads:
+
+```text
+machine-runtime/config/pi-machine.env
+```
+
+Useful service commands:
+
+```bash
+sudo systemctl start pillcount-machine.service
+sudo systemctl status pillcount-machine.service
+sudo journalctl -u pillcount-machine.service -f
+```
+
+Use this service only when you want the runtime to auto-start on the Pi itself.
+If you want the website `/live` page to start and stop the Raspberry Pi remotely,
+run the remote-control agent service described below instead of the always-on runtime service.
 
 ### 5a. Run with the ML detector
 
@@ -487,6 +558,85 @@ Verify the sync landed:
 1. open the dashboard page at `/machine-runs`
 2. confirm the new `run_id`, `machine_name`, detector/backend, count, and runtime status appear
 3. or call `GET /api/machine-runs?page=1&pageSize=20`
+
+## Website Live Preview
+
+The website already has a live runtime page at `/live`. The Pi runtime can feed it directly without changing the counting loop architecture.
+
+Required Pi env:
+
+```bash
+export PILLCOUNT_SYNC_API_URL=http://<api-host>:4000/api
+export PILLCOUNT_SYNC_API_KEY=<api-key>
+export PILLCOUNT_MACHINE_CODE=pill-counter-pi
+export PILLCOUNT_LIVE_PREVIEW_ENABLED=1
+```
+
+Optional tuning env:
+
+```bash
+export PILLCOUNT_LIVE_PREVIEW_INTERVAL_SECONDS=1.5
+export PILLCOUNT_LIVE_PREVIEW_TIMEOUT_SECONDS=1.5
+export PILLCOUNT_LIVE_PREVIEW_MAX_WIDTH=640
+export PILLCOUNT_LIVE_PREVIEW_JPEG_QUALITY=60
+```
+
+What this does:
+
+- `POST /api/machine-runtime/:machineCode/telemetry` publishes lightweight runtime telemetry and a JPEG snapshot
+- the Pi display remains the primary local preview
+- the dashboard `/live` page shows the latest machine snapshot and live counts
+
+Verify the website preview:
+
+1. start the backend and web app on the PC
+2. log in to the dashboard
+3. open `/live`
+4. select `pill-counter-pi` if needed
+5. confirm the card switches to `Machine snapshot` and shows the Pi frame, live counts, FPS, and model info
+
+## Website Remote Start And Stop
+
+The `/live` page can also start and stop the Raspberry Pi remotely, but that path requires the Pi control agent to stay online.
+
+Required Pi env in `config/pi-machine.env`:
+
+```bash
+PILLCOUNT_SYNC_API_URL=http://<api-host>:4000/api
+PILLCOUNT_SYNC_API_KEY=<api-key>
+PILLCOUNT_MACHINE_CODE=pill-counter-pi
+PILLCOUNT_CONTROL_POLL_INTERVAL_SECONDS=2.0
+PILLCOUNT_CONTROL_TIMEOUT_SECONDS=5.0
+```
+
+Run the agent manually:
+
+```bash
+cd ~/PillCountingmachine/machine-runtime
+source .venv/bin/activate
+bash scripts/start_machine_agent.sh
+```
+
+Or install it as a service:
+
+```bash
+sudo bash scripts/install_pi_agent_service.sh --user "$USER"
+sudo systemctl start pillcount-machine-agent.service
+sudo systemctl status pillcount-machine-agent.service
+sudo journalctl -u pillcount-machine-agent.service -f
+```
+
+How it works:
+
+- the website sends `POST /api/machine-runtime/:machineCode/start` or `POST /api/machine-runtime/:machineCode/stop`
+- the backend stores the desired command for that machine
+- the Pi agent polls `POST /api/machine-runtime/:machineCode/control/heartbeat` with the same machine API key
+- the Pi agent starts or stops `scripts/start_machine.sh` locally
+
+Important:
+
+- do not run both `pillcount-machine.service` and `pillcount-machine-agent.service` for the same Pi unless you intentionally want the runtime to auto-start outside the website control flow
+- if the `/live` page shows `REMOTE_AGENT_OFFLINE`, the dashboard is working but the Pi control agent is not running or its heartbeat is stale
 
 ## Validation And Next Step
 
