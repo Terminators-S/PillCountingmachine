@@ -93,31 +93,38 @@ def open_live_camera_source(
     *,
     explicit_camera_index: bool,
     max_scan_index: int = 4,
+    retry_passes: int = 3,
+    retry_delay_seconds: float = 1.0,
 ) -> LiveCameraOpenResult:
     candidate_indexes = (
         [config.camera_index]
         if explicit_camera_index
         else resolve_camera_candidate_indexes(config.camera_index, max_scan_index=max_scan_index)
     )
+    probe_timeout_seconds = min(float(config.capture_timeout_seconds), 2.0)
 
-    for index in candidate_indexes:
-        candidate_config = CameraRuntimeConfig(**{**config.__dict__, "camera_index": index})
-        capture = open_camera(candidate_config)
-        if not capture.isOpened():
+    for attempt_index in range(max(1, retry_passes)):
+        for index in candidate_indexes:
+            candidate_config = CameraRuntimeConfig(**{**config.__dict__, "camera_index": index})
+            capture = open_camera(candidate_config)
+            if not capture.isOpened():
+                capture.release()
+                continue
+
+            warmup_camera(capture, candidate_config.warmup_frames)
+            first_frame = read_frame_with_timeout(capture, probe_timeout_seconds)
+            if first_frame is not None:
+                return LiveCameraOpenResult(
+                    capture=capture,
+                    config=candidate_config,
+                    first_frame=first_frame,
+                    attempted_indexes=tuple(candidate_indexes),
+                )
+
             capture.release()
-            continue
 
-        warmup_camera(capture, candidate_config.warmup_frames)
-        first_frame = read_frame_with_timeout(capture, candidate_config.capture_timeout_seconds)
-        if first_frame is not None:
-            return LiveCameraOpenResult(
-                capture=capture,
-                config=candidate_config,
-                first_frame=first_frame,
-                attempted_indexes=tuple(candidate_indexes),
-            )
-
-        capture.release()
+        if attempt_index < max(1, retry_passes) - 1:
+            time.sleep(max(0.1, retry_delay_seconds))
 
     return LiveCameraOpenResult(
         capture=None,

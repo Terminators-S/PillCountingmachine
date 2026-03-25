@@ -90,6 +90,27 @@ class CameraAutoDiscoveryTests(unittest.TestCase):
         self.assertEqual(3, result.config.camera_index)
         self.assertEqual((3,), result.attempted_indexes)
 
+    def test_open_live_camera_source_retries_before_failing(self):
+        config = CameraRuntimeConfig(camera_index=0)
+        open_attempts: list[int] = []
+
+        def fake_open_camera(candidate_config: CameraRuntimeConfig):
+            open_attempts.append(candidate_config.camera_index)
+            return FakeCapture(candidate_config.camera_index, opened=len(open_attempts) >= 2)
+
+        with (
+            patch("src.capture.camera.resolve_camera_candidate_indexes", return_value=[0]),
+            patch("src.capture.camera.open_camera", side_effect=fake_open_camera),
+            patch("src.capture.camera.warmup_camera"),
+            patch("src.capture.camera.read_frame_with_timeout", return_value=object()),
+            patch("src.capture.camera.time.sleep"),
+        ):
+            result = open_live_camera_source(config, explicit_camera_index=False, retry_passes=2, retry_delay_seconds=0.1)
+
+        self.assertIsNotNone(result.capture)
+        self.assertGreaterEqual(len(open_attempts), 2)
+        self.assertEqual(0, result.config.camera_index)
+
 
 if __name__ == "__main__":
     unittest.main()
