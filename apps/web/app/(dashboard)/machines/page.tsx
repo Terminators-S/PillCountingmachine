@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
-import { Activity, AlertTriangle, Cpu, ExternalLink, Radio, RefreshCcw, Server } from 'lucide-react';
+import { Activity, AlertTriangle, ChevronDown, ChevronUp, ExternalLink, Radio, RefreshCcw, Server } from 'lucide-react';
 import { Button, buttonVariants } from '../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
@@ -15,7 +15,7 @@ import { StatCard } from '../../../components/stat-card';
 import { apiRequest } from '../../../lib/api';
 import { formatDateTime, formatNumber } from '../../../lib/format';
 import { cn } from '../../../lib/utils';
-import { EventListResponse, Machine, MachineEventRow, MachineRuntimeStateSummary, MachineStatus } from '../../../types/api';
+import { EventListResponse, Machine, MachineRuntimeStateSummary, MachineStatus } from '../../../types/api';
 
 type FleetHealth = 'healthy' | 'warning' | 'critical';
 
@@ -56,20 +56,53 @@ function healthLabel(health: FleetHealth) {
   return 'Healthy';
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function truncateText(value: string, maxLength = 140) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 3)}...`;
+}
+
 function summarizeEventPayload(payload?: Record<string, unknown>) {
-  if (!payload || !Object.keys(payload).length) return '-';
+  if (!payload || !Object.keys(payload).length) return 'No payload details.';
+
+  const details = asRecord(payload.details);
+  const nestedMessage = details && typeof details.message === 'string' ? details.message : null;
+
+  if (typeof payload.message === 'string' && payload.message.trim()) {
+    return truncateText(payload.message);
+  }
+
+  if (nestedMessage?.trim()) {
+    return truncateText(nestedMessage);
+  }
+
+  if (typeof payload.statusText === 'string' && payload.statusText.trim()) {
+    return truncateText(payload.statusText);
+  }
+
+  if (typeof payload.displayName === 'string' || typeof payload.location === 'string' || typeof payload.firmwareVersion === 'string') {
+    const fragments = [
+      typeof payload.displayName === 'string' ? payload.displayName : null,
+      typeof payload.location === 'string' ? payload.location : null,
+      typeof payload.firmwareVersion === 'string' ? `Firmware ${payload.firmwareVersion}` : null
+    ].filter(Boolean);
+
+    if (fragments.length) return fragments.join(' • ');
+  }
+
   const serialized = JSON.stringify(payload);
   return serialized.length > 140 ? `${serialized.slice(0, 137)}...` : serialized;
 }
-
-const QUICK_EVENT_FILTERS = ['machine.error', 'machine.heartbeat', 'machine.runtime.remote.start.requested', 'machine.runtime.remote.stop.requested', 'count.completed'];
 
 export default function MachinesPage() {
   const queryClient = useQueryClient();
   const [machineFilter, setMachineFilter] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('');
-  const [selectedMachineCode, setSelectedMachineCode] = useState('');
   const [bulkFeedback, setBulkFeedback] = useState('');
+  const [isEventLogExpanded, setIsEventLogExpanded] = useState(false);
 
   const machines = useQuery({
     queryKey: ['machines', 'fleet'],
@@ -95,12 +128,6 @@ export default function MachinesPage() {
     queryFn: () => apiRequest<EventListResponse>(`/machine-events?${eventQueryString}`)
   });
 
-  const selectedMachineEvents = useQuery({
-    queryKey: ['machine-events', 'selected-machine', selectedMachineCode],
-    queryFn: () => apiRequest<EventListResponse>(`/machine-events?machineId=${encodeURIComponent(selectedMachineCode)}&page=1&pageSize=8`),
-    enabled: Boolean(selectedMachineCode)
-  });
-
   const fleetRows = useMemo<FleetMachineRow[]>(() => {
     const runtimeByCode = new Map((runtimeList.data || []).map((entry) => [entry.machineCode, entry]));
     return (machines.data || []).map((machine) => {
@@ -120,17 +147,6 @@ export default function MachinesPage() {
       };
     });
   }, [machines.data, runtimeList.data]);
-
-  const selectedMachine = useMemo(
-    () => fleetRows.find((entry) => entry.machineCode === selectedMachineCode) || null,
-    [fleetRows, selectedMachineCode]
-  );
-
-  useEffect(() => {
-    if (!fleetRows.length) return;
-    if (selectedMachineCode && fleetRows.some((entry) => entry.machineCode === selectedMachineCode)) return;
-    setSelectedMachineCode(fleetRows.find((entry) => entry.runtimeState === 'RUNNING')?.machineCode || fleetRows[0].machineCode);
-  }, [fleetRows, selectedMachineCode]);
 
   const stats = useMemo(() => {
     const total = fleetRows.length;
@@ -166,9 +182,7 @@ export default function MachinesPage() {
         header: 'Machine',
         cell: ({ row }) => (
           <div className='space-y-1'>
-            <button className='font-semibold text-left text-slate-950 dark:text-white' onClick={() => setSelectedMachineCode(row.original.machineCode)}>
-              {row.original.machineCode}
-            </button>
+            <p className='font-semibold text-slate-950 dark:text-white'>{row.original.machineCode}</p>
             <p className='text-xs text-muted-foreground'>{row.original.displayName || 'Unnamed device'}</p>
           </div>
         )
@@ -216,30 +230,11 @@ export default function MachinesPage() {
     []
   );
 
-  const eventColumns = useMemo<ColumnDef<MachineEventRow>[]>(
-    () => [
-      { accessorKey: 'machine.machineCode', header: 'Machine', cell: ({ row }) => row.original.machine.machineCode },
-      { accessorKey: 'eventType', header: 'Event Type', cell: ({ row }) => <span className='font-medium'>{row.original.eventType}</span> },
-      { accessorKey: 'occurredAt', header: 'Occurred At', cell: ({ row }) => formatDateTime(row.original.occurredAt) },
-      { accessorKey: 'sourceIp', header: 'Source IP', cell: ({ row }) => row.original.sourceIp || '-' },
-      {
-        accessorKey: 'payload',
-        header: 'Payload',
-        cell: ({ row }) => (
-          <pre className='max-w-[420px] overflow-x-auto whitespace-pre-wrap rounded bg-muted/50 p-2 text-[11px] leading-4'>
-            {JSON.stringify(row.original.payload || {}, null, 2)}
-          </pre>
-        )
-      }
-    ],
-    []
-  );
-
   return (
     <div className='space-y-6'>
       <PageHeader
         title='Machines Fleet'
-        description='Monitor IoT device health, runtime state, heartbeat recency, and operational events from one page.'
+        description='A simpler view of device health, runtime state, and recent machine activity.'
         actions={
           <Button onClick={() => refreshAll()}>
             <RefreshCcw className='mr-2 h-4 w-4' />
@@ -257,188 +252,146 @@ export default function MachinesPage() {
 
       {bulkFeedback ? <div className='rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800'>{bulkFeedback}</div> : null}
 
-      <section className='grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_380px]'>
-        <Card>
-          <CardHeader>
-            <CardTitle>Fleet Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {machines.data && runtimeList.data ? (
-              <DataTable
-                columns={machineColumns}
-                data={fleetRows}
-                enableRowSelection
-                bulkActionLabel='Copy selected machine codes'
-                onBulkAction={copyMachineCodes}
-                renderRowActions={(row) => (
-                  <div className='flex justify-end gap-2'>
-                    <Button
-                      size='sm'
-                      variant='ghost'
-                      onClick={() => {
-                        setSelectedMachineCode(row.machineCode);
-                        setMachineFilter(row.machineCode);
-                      }}
-                    >
-                      View events
-                    </Button>
-                    <Link href='/live' className={cn(buttonVariants({ size: 'sm', variant: 'secondary' }))}>
-                      <ExternalLink className='mr-2 h-4 w-4' />
-                      Open live
-                    </Link>
-                  </div>
-                )}
-                searchPlaceholder='Search machine code, location, runtime state...'
-                emptyText='No machines available.'
-              />
-            ) : machines.isLoading || runtimeList.isLoading ? (
-              <p className='text-sm text-muted-foreground'>Loading machine fleet...</p>
-            ) : (
-              <p className='text-sm text-red-600'>Failed to load machine fleet.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{selectedMachine ? `${selectedMachine.machineCode} details` : 'Machine details'}</CardTitle>
-          </CardHeader>
-          <CardContent className='space-y-4'>
-            {selectedMachine ? (
-              <>
-                <div className='flex flex-wrap gap-2'>
-                  <Badge variant={machineStatusVariant(selectedMachine.displayStatus || selectedMachine.status)}>
-                    {selectedMachine.displayStatus || selectedMachine.status}
-                  </Badge>
-                  <Badge variant={machineStatusVariant(selectedMachine.runtimeState)}>{selectedMachine.runtimeState}</Badge>
-                  <Badge variant={machineStatusVariant(selectedMachine.cameraState)}>{selectedMachine.cameraState}</Badge>
-                  <Badge variant={machineStatusVariant(selectedMachine.health === 'healthy' ? 'ONLINE' : selectedMachine.health === 'warning' ? 'MAINTENANCE' : 'ERROR')}>
-                    {healthLabel(selectedMachine.health)}
-                  </Badge>
-                </div>
-
-                <div className='grid gap-3 sm:grid-cols-2'>
-                  <div className='rounded-2xl border border-border/70 bg-muted/15 px-4 py-3'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>Location</p>
-                    <p className='mt-1 text-sm font-medium'>{selectedMachine.location}</p>
-                  </div>
-                  <div className='rounded-2xl border border-border/70 bg-muted/15 px-4 py-3'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>Firmware</p>
-                    <p className='mt-1 text-sm font-medium'>{selectedMachine.firmwareVersion}</p>
-                  </div>
-                  <div className='rounded-2xl border border-border/70 bg-muted/15 px-4 py-3'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>Last heartbeat</p>
-                    <p className='mt-1 text-sm font-medium'>{selectedMachine.lastHeartbeat ? formatDateTime(selectedMachine.lastHeartbeat) : 'No heartbeat yet'}</p>
-                  </div>
-                  <div className='rounded-2xl border border-border/70 bg-muted/15 px-4 py-3'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>Model / FPS</p>
-                    <p className='mt-1 text-sm font-medium'>{selectedMachine.runtime?.modelName || 'No runtime selected'}</p>
-                    <p className='text-xs text-muted-foreground'>{selectedMachine.fps ? `${selectedMachine.fps.toFixed(1)} FPS` : '0.0 FPS'}</p>
-                  </div>
-                </div>
-
-                <div className='rounded-2xl border border-border/70 bg-muted/15 px-4 py-3'>
-                  <div className='flex items-center justify-between gap-3'>
-                    <div>
-                      <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>Live counts</p>
-                      <p className='mt-1 text-sm font-medium'>Visible {formatNumber(selectedMachine.visibleTotal)} / Session {formatNumber(selectedMachine.sessionTotal)}</p>
-                    </div>
-                    <Cpu className='h-4 w-4 text-muted-foreground' />
-                  </div>
-                </div>
-
-                <div className='rounded-2xl border border-border/70 bg-muted/15 px-4 py-3'>
-                  <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>Latest status</p>
-                  <p className='mt-2 text-sm text-slate-700 dark:text-slate-200'>{selectedMachine.latestError || selectedMachine.latestMessage || 'No runtime message yet.'}</p>
-                </div>
-
-                <div className='space-y-2'>
-                  <div className='flex items-center justify-between gap-3'>
-                    <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>Recent events</p>
-                    <Button
-                      size='sm'
-                      variant='ghost'
-                      onClick={() => {
-                        setMachineFilter(selectedMachine.machineCode);
-                        setEventTypeFilter('');
-                      }}
-                    >
-                      Show in viewer
-                    </Button>
-                  </div>
-                  {selectedMachineEvents.data?.rows?.length ? (
-                    <div className='space-y-2'>
-                      {selectedMachineEvents.data.rows.map((event) => (
-                        <div key={event.id} className='rounded-2xl border border-border/70 bg-white/70 px-3 py-3 dark:bg-slate-950/40'>
-                          <div className='flex items-start justify-between gap-3'>
-                            <p className='text-sm font-semibold'>{event.eventType}</p>
-                            <p className='text-xs text-muted-foreground'>{formatDateTime(event.occurredAt)}</p>
-                          </div>
-                          <p className='mt-2 text-xs text-muted-foreground'>{summarizeEventPayload(event.payload)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : selectedMachineEvents.isLoading ? (
-                    <p className='text-sm text-muted-foreground'>Loading recent events...</p>
-                  ) : (
-                    <p className='text-sm text-muted-foreground'>No recent events for this machine.</p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className='text-sm text-muted-foreground'>Select a machine to inspect its runtime health and recent events.</p>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
       <Card>
         <CardHeader>
-          <CardTitle>Machine Events Viewer</CardTitle>
+          <CardTitle>Fleet Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {machines.data && runtimeList.data ? (
+            <DataTable
+              columns={machineColumns}
+              data={fleetRows}
+              enableRowSelection
+              bulkActionLabel='Copy selected machine codes'
+              onBulkAction={copyMachineCodes}
+              renderRowActions={(row) => (
+                <div className='flex justify-end gap-2'>
+                  <Button
+                    size='sm'
+                    variant='ghost'
+                    onClick={() => {
+                      setMachineFilter(row.machineCode);
+                      setEventTypeFilter('');
+                      setIsEventLogExpanded(true);
+                    }}
+                  >
+                    View events
+                  </Button>
+                  <Link href='/live' className={cn(buttonVariants({ size: 'sm', variant: 'secondary' }))}>
+                    <ExternalLink className='mr-2 h-4 w-4' />
+                    Open live
+                  </Link>
+                </div>
+              )}
+              searchPlaceholder='Search machine code, location, runtime state...'
+              emptyText='No machines available.'
+            />
+          ) : machines.isLoading || runtimeList.isLoading ? (
+            <p className='text-sm text-muted-foreground'>Loading machine fleet...</p>
+          ) : (
+            <p className='text-sm text-red-600'>Failed to load machine fleet.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className='flex-row items-center justify-between space-y-0'>
+          <div className='space-y-1'>
+            <CardTitle>Event Log</CardTitle>
+            <p className='text-sm text-muted-foreground'>Collapse the full log until you need to inspect machine details.</p>
+          </div>
+          <Button size='sm' variant='secondary' onClick={() => setIsEventLogExpanded((current) => !current)}>
+            {isEventLogExpanded ? (
+              <>
+                <ChevronUp className='mr-2 h-4 w-4' />
+                Hide log
+              </>
+            ) : (
+              <>
+                <ChevronDown className='mr-2 h-4 w-4' />
+                Show log
+              </>
+            )}
+          </Button>
         </CardHeader>
         <CardContent className='space-y-4'>
-          <div className='grid gap-3 md:grid-cols-3'>
-            <div>
-              <label className='mb-1 block text-xs font-semibold uppercase text-muted-foreground'>Machine Code</label>
-              <Input value={machineFilter} onChange={(e) => setMachineFilter(e.target.value)} placeholder='e.g. pill-counter-pi' />
-            </div>
-            <div>
-              <label className='mb-1 block text-xs font-semibold uppercase text-muted-foreground'>Event Type</label>
-              <Input value={eventTypeFilter} onChange={(e) => setEventTypeFilter(e.target.value)} placeholder='machine.error' />
-            </div>
-            <div className='flex items-end'>
-              <Button
-                variant='secondary'
-                className='w-full'
-                onClick={() => {
-                  setMachineFilter('');
-                  setEventTypeFilter('');
-                }}
-              >
-                Clear filters
+          {!isEventLogExpanded ? (
+            <div className='flex flex-col gap-3 rounded-2xl border border-dashed border-border/70 bg-muted/10 px-4 py-4 md:flex-row md:items-center md:justify-between'>
+              <div className='space-y-1'>
+                <p className='text-sm font-medium text-slate-900 dark:text-slate-100'>Event log hidden</p>
+                <p className='text-sm text-muted-foreground'>
+                  {events.data ? `${formatNumber(events.data.rows.length)} event(s) loaded` : 'Open the log to inspect machine activity.'}
+                  {machineFilter ? ` • Machine ${machineFilter}` : ''}
+                  {eventTypeFilter ? ` • Type ${eventTypeFilter}` : ''}
+                </p>
+              </div>
+              <Button size='sm' variant='ghost' onClick={() => setIsEventLogExpanded(true)}>
+                Expand details
               </Button>
             </div>
-          </div>
-
-          <div className='flex flex-wrap gap-2'>
-            {QUICK_EVENT_FILTERS.map((eventType) => (
-              <Button
-                key={eventType}
-                size='sm'
-                variant={eventTypeFilter === eventType ? 'default' : 'secondary'}
-                onClick={() => setEventTypeFilter((current) => (current === eventType ? '' : eventType))}
-              >
-                {eventType}
-              </Button>
-            ))}
-          </div>
-
-          {events.data ? (
-            <DataTable columns={eventColumns} data={events.data.rows} searchPlaceholder='Search event payload...' emptyText='No events match current filters.' />
-          ) : events.isLoading ? (
-            <p className='text-sm text-muted-foreground'>Loading machine events...</p>
           ) : (
-            <p className='text-sm text-red-600'>Failed to load machine events.</p>
+            <>
+              <div className='grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px]'>
+                <div>
+                  <label className='mb-1 block text-xs font-semibold uppercase text-muted-foreground'>Machine Code</label>
+                  <Input value={machineFilter} onChange={(e) => setMachineFilter(e.target.value)} placeholder='e.g. pill-counter-pi' />
+                </div>
+                <div>
+                  <label className='mb-1 block text-xs font-semibold uppercase text-muted-foreground'>Event Type</label>
+                  <Input value={eventTypeFilter} onChange={(e) => setEventTypeFilter(e.target.value)} placeholder='machine.error' />
+                </div>
+                <div className='flex items-end'>
+                  <Button
+                    variant='secondary'
+                    className='w-full'
+                    onClick={() => {
+                      setMachineFilter('');
+                      setEventTypeFilter('');
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              </div>
+
+              {events.data ? (
+                events.data.rows.length ? (
+                  <div className='overflow-hidden rounded-2xl border border-border/70 bg-white/75 dark:bg-slate-950/40'>
+                    {events.data.rows.map((event) => (
+                      <div key={event.id} className='border-b border-border/60 px-4 py-4 last:border-b-0'>
+                        <div className='flex flex-col gap-3 md:flex-row md:items-start md:justify-between'>
+                          <div className='min-w-0 space-y-2'>
+                            <div className='flex flex-wrap items-center gap-2'>
+                              <span className='text-sm font-semibold text-slate-950 dark:text-white'>{event.machine.machineCode}</span>
+                              <Badge variant={machineStatusVariant(event.eventType.includes('error') ? 'ERROR' : event.eventType.includes('heartbeat') ? 'ONLINE' : 'MAINTENANCE')}>
+                                {event.eventType}
+                              </Badge>
+                            </div>
+                            <p className='text-sm text-slate-700 dark:text-slate-200'>{summarizeEventPayload(event.payload)}</p>
+                            {event.sourceIp ? <p className='text-xs text-muted-foreground'>Source {event.sourceIp}</p> : null}
+                            <details className='text-xs text-muted-foreground'>
+                              <summary className='cursor-pointer list-none font-medium hover:text-foreground'>Raw payload</summary>
+                              <pre className='mt-2 overflow-x-auto whitespace-pre-wrap rounded-xl bg-muted/50 p-3 text-[11px] leading-5'>
+                                {JSON.stringify(event.payload || {}, null, 2)}
+                              </pre>
+                            </details>
+                          </div>
+                          <p className='shrink-0 text-xs text-muted-foreground'>{formatDateTime(event.occurredAt)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className='rounded-2xl border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground'>
+                    No events match the current filters.
+                  </p>
+                )
+              ) : events.isLoading ? (
+                <p className='text-sm text-muted-foreground'>Loading machine events...</p>
+              ) : (
+                <p className='text-sm text-red-600'>Failed to load machine events.</p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

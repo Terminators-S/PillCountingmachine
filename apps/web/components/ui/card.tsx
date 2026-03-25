@@ -5,7 +5,7 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   return (
     <div
       className={cn(
-        'surface-card text-card-foreground transition-shadow duration-200 hover:shadow-[0_18px_42px_rgba(15,23,42,0.10)]',
+        'surface-card text-card-foreground transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.10)]',
         className
       )}
       {...props}
