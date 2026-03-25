@@ -387,7 +387,7 @@ export function AppShell({
         href={item.disabled ? '#' : item.href}
         title={item.label}
         className={cn(
-          'group flex items-center rounded-xl text-sm transition-all duration-200',
+          'sidebar-nav-link group flex items-center rounded-xl text-sm transition-all duration-200',
           sidebarCollapsed ? 'justify-center px-2 py-2' : 'gap-3 px-2.5 py-2',
           item.disabled ? 'pointer-events-none opacity-35' : 'hover:bg-slate-950/5 dark:hover:bg-white/5',
           active
@@ -397,7 +397,7 @@ export function AppShell({
       >
         <span
           className={cn(
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors',
+            'sidebar-nav-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors',
             active
               ? 'border-emerald-200 bg-white text-emerald-700 dark:border-emerald-500/20 dark:bg-slate-900 dark:text-emerald-300'
               : 'border-border/70 bg-white/75 text-slate-500 group-hover:text-slate-900 dark:bg-slate-950/50 dark:text-slate-300'
@@ -419,7 +419,7 @@ export function AppShell({
         href={item.disabled ? '#' : item.href}
         title={labelOverride || item.label}
         className={cn(
-          'group flex items-center rounded-xl transition-all duration-200',
+          'sidebar-nav-link group flex items-center rounded-xl transition-all duration-200',
           sidebarCollapsed ? 'justify-center p-2' : 'gap-3 px-2 py-1.5',
           item.disabled ? 'pointer-events-none opacity-35' : 'hover:bg-slate-950/5 dark:hover:bg-white/5',
           active
@@ -429,7 +429,7 @@ export function AppShell({
       >
         <span
           className={cn(
-            'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors',
+            'sidebar-nav-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors',
             active
               ? 'border-emerald-200 bg-white text-emerald-700 dark:border-emerald-500/20 dark:bg-slate-900 dark:text-emerald-300'
               : 'border-border/70 bg-white/80 text-slate-500 group-hover:text-slate-900 dark:bg-slate-950/50 dark:text-slate-300'
@@ -480,12 +480,12 @@ export function AppShell({
               {secondaryNavItems.length ? (
                 toolNavItems.length ? (
                 <details
-                  className='group space-y-2 rounded-2xl border border-border/70 bg-white/55 p-2 dark:bg-slate-950/35'
+                  className='sidebar-accordion group space-y-2 rounded-2xl border border-border/70 bg-white/55 p-2 dark:bg-slate-950/35'
                   open={Boolean(activeSecondaryItem)}
                 >
                   <summary
                     className={cn(
-                      'flex cursor-pointer list-none items-center justify-between rounded-xl px-2 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200',
+                      'sidebar-accordion-summary flex cursor-pointer list-none items-center justify-between rounded-xl px-2 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200',
                       sidebarCollapsed && 'justify-center'
                     )}
                   >
@@ -499,7 +499,7 @@ export function AppShell({
                     )}
                   </summary>
 
-                  <div className='space-y-1'>
+                  <div className='sidebar-accordion-panel space-y-1'>
                     {toolNavItems.map((item) => renderNavItem(item))}
                   </div>
                 </details>
@@ -508,12 +508,12 @@ export function AppShell({
 
               {settingsItem ? (
                 <details
-                  className='group space-y-2 rounded-2xl border border-border/70 bg-white/55 p-2 dark:bg-slate-950/35'
+                  className='sidebar-accordion group space-y-2 rounded-2xl border border-border/70 bg-white/55 p-2 dark:bg-slate-950/35'
                   open={settingsSectionActive}
                 >
                   <summary
                     className={cn(
-                      'flex cursor-pointer list-none items-center justify-between rounded-xl px-2 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200',
+                      'sidebar-accordion-summary flex cursor-pointer list-none items-center justify-between rounded-xl px-2 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200',
                       sidebarCollapsed && 'justify-center'
                     )}
                   >
@@ -527,7 +527,7 @@ export function AppShell({
                     )}
                   </summary>
 
-                  <div className='space-y-1'>
+                  <div className='sidebar-accordion-panel space-y-1'>
                     {renderCompactNavItem(settingsItem, 'General')}
                     {!sidebarCollapsed ? settingsChildItems.map((item) => renderCompactNavItem(item)) : null}
                   </div>
