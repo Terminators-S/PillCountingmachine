@@ -3,11 +3,14 @@ import { spawn } from 'node:child_process';
 const env = {
   ...process.env,
   NEXT_PUBLIC_DEMO_MODE: 'false',
-  NEXT_PUBLIC_ENABLE_FIREBASE_AUTH: process.env.NEXT_PUBLIC_ENABLE_FIREBASE_AUTH || 'false',
   NEXT_PUBLIC_STATIC_EXPORT: 'true',
   NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
   API_PROXY_TARGET: process.env.API_PROXY_TARGET || ''
 };
+
+if (typeof process.env.NEXT_PUBLIC_ENABLE_FIREBASE_AUTH === 'string') {
+  env.NEXT_PUBLIC_ENABLE_FIREBASE_AUTH = process.env.NEXT_PUBLIC_ENABLE_FIREBASE_AUTH;
+}
 
 function run(command, args) {
   return new Promise((resolve, reject) => {

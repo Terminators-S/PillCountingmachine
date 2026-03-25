@@ -1,6 +1,7 @@
 export const ACCESS_TOKEN_KEY = 'pillcount_access_token';
 export const REFRESH_TOKEN_KEY = 'pillcount_refresh_token';
 export const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+export const AUTH_STATE_EVENT = 'pillcount-auth-state-change';
 
 function writeCookie(name: string, value: string, maxAgeSeconds = AUTH_COOKIE_MAX_AGE_SECONDS) {
   if (typeof document === 'undefined') return;
@@ -10,6 +11,11 @@ function writeCookie(name: string, value: string, maxAgeSeconds = AUTH_COOKIE_MA
 function clearCookie(name: string) {
   if (typeof document === 'undefined') return;
   document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+
+function notifyAuthStateChanged() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(AUTH_STATE_EVENT));
 }
 
 export function getAccessToken() {
@@ -28,6 +34,7 @@ export function setTokens(accessToken: string, refreshToken: string) {
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
   writeCookie(ACCESS_TOKEN_KEY, accessToken);
   writeCookie(REFRESH_TOKEN_KEY, refreshToken);
+  notifyAuthStateChanged();
 }
 
 export function clearTokens() {
@@ -36,6 +43,7 @@ export function clearTokens() {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   clearCookie(ACCESS_TOKEN_KEY);
   clearCookie(REFRESH_TOKEN_KEY);
+  notifyAuthStateChanged();
 }
 
 export function syncAuthCookiesFromStorage() {

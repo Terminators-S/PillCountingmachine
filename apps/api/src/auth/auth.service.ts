@@ -1,15 +1,19 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 
 @Injectable()
 export class AuthService {
+  private googleClient: OAuth2Client | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -30,6 +34,119 @@ export class AuthService {
 
   private getRefreshTtl() {
     return this.configService.get<string>('JWT_REFRESH_TTL') || '7d';
+  }
+
+  private getGoogleClientId() {
+    return String(this.configService.get<string>('GOOGLE_CLIENT_ID') || '').trim();
+  }
+
+  private getFirebaseWebApiKey() {
+    return String(this.configService.get<string>('FIREBASE_WEB_API_KEY') || '').trim();
+  }
+
+  private getGoogleClient() {
+    const clientId = this.getGoogleClientId();
+    if (!clientId) {
+      throw new BadRequestException({ code: 'GOOGLE_NOT_CONFIGURED', message: 'Google sign-in is not configured on the API.' });
+    }
+
+    if (!this.googleClient) {
+      this.googleClient = new OAuth2Client(clientId);
+    }
+
+    return this.googleClient;
+  }
+
+  private async verifyFirebaseIdToken(idToken: string) {
+    const apiKey = this.getFirebaseWebApiKey();
+    if (!apiKey) {
+      return null;
+    }
+
+    const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ idToken })
+    });
+
+    const payload = (await response.json().catch(() => null)) as
+      | {
+          users?: Array<{
+            email?: string;
+            emailVerified?: boolean;
+            displayName?: string;
+          }>;
+          error?: { message?: string };
+        }
+      | null;
+
+    if (!response.ok) {
+      const code = String(payload?.error?.message || '').trim();
+      if (code === 'INVALID_ID_TOKEN' || code === 'USER_NOT_FOUND' || code === 'TOKEN_EXPIRED') {
+        return null;
+      }
+      throw new UnauthorizedException({
+        code: 'FIREBASE_TOKEN_INVALID',
+        message: 'Firebase sign-in could not be verified.'
+      });
+    }
+
+    const user = payload?.users?.[0];
+    if (!user?.email) {
+      throw new UnauthorizedException({
+        code: 'FIREBASE_TOKEN_INVALID',
+        message: 'Firebase did not return a usable email address.'
+      });
+    }
+
+    if (user.emailVerified !== true) {
+      throw new UnauthorizedException({
+        code: 'FIREBASE_EMAIL_NOT_VERIFIED',
+        message: 'Firebase account email is not verified.'
+      });
+    }
+
+    return {
+      email: user.email.toLowerCase(),
+      fullName: String(user.displayName || '').trim() || user.email.split('@')[0]
+    };
+  }
+
+  private async verifyGoogleIdToken(idToken: string) {
+    const firebaseProfile = await this.verifyFirebaseIdToken(idToken);
+    if (firebaseProfile) {
+      return firebaseProfile;
+    }
+
+    try {
+      const client = this.getGoogleClient();
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: this.getGoogleClientId(),
+      });
+
+      const payload = ticket.getPayload();
+      if (!payload?.email) {
+        throw new UnauthorizedException({ code: 'GOOGLE_TOKEN_INVALID', message: 'Google did not return a usable email address.' });
+      }
+
+      if (payload.email_verified !== true) {
+        throw new UnauthorizedException({ code: 'GOOGLE_EMAIL_NOT_VERIFIED', message: 'Google account email is not verified.' });
+      }
+
+      return {
+        email: payload.email.toLowerCase(),
+        fullName: String(payload.name || '').trim() || payload.email.split('@')[0],
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      throw new UnauthorizedException({ code: 'GOOGLE_TOKEN_INVALID', message: 'Google sign-in could not be verified.' });
+    }
   }
 
   private async getUserRoles(userId: string): Promise<string[]> {
@@ -66,6 +183,27 @@ export class AuthService {
     });
 
     return { accessToken, refreshToken, roles };
+  }
+
+  private async ensureDefaultViewerRole(userId: string) {
+    const viewerRole = await this.prisma.role.findUnique({ where: { code: 'VIEWER' } });
+    if (!viewerRole) {
+      return;
+    }
+
+    await this.prisma.userRole.upsert({
+      where: {
+        userId_roleId: {
+          userId,
+          roleId: viewerRole.id
+        }
+      },
+      update: {},
+      create: {
+        userId,
+        roleId: viewerRole.id
+      }
+    });
   }
 
   async register(input: RegisterDto) {
@@ -112,6 +250,46 @@ export class AuthService {
     if (!validPassword) {
       throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' });
     }
+
+    const tokens = await this.issueTokens(user.id, user.email);
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        roles: tokens.roles
+      },
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken
+    };
+  }
+
+  async loginWithGoogle(input: GoogleLoginDto) {
+    const profile = await this.verifyGoogleIdToken(input.idToken);
+    const existing = await this.prisma.user.findUnique({ where: { email: profile.email } });
+
+    if (existing && !existing.isActive) {
+      throw new UnauthorizedException({ code: 'ACCOUNT_DISABLED', message: 'This account is disabled.' });
+    }
+
+    let user = existing;
+    if (!user) {
+      const passwordHash = await bcrypt.hash(randomUUID(), 10);
+      user = await this.prisma.user.create({
+        data: {
+          email: profile.email,
+          fullName: profile.fullName,
+          passwordHash
+        }
+      });
+    } else if (profile.fullName && profile.fullName !== user.fullName) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { fullName: profile.fullName }
+      });
+    }
+
+    await this.ensureDefaultViewerRole(user.id);
 
     const tokens = await this.issueTokens(user.id, user.email);
     return {

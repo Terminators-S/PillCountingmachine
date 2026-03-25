@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { Public } from '../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -21,6 +22,12 @@ export class AuthController {
   @Post('login')
   login(@Body() input: LoginDto) {
     return this.authService.login(input);
+  }
+
+  @Public()
+  @Post('google')
+  google(@Body() input: GoogleLoginDto) {
+    return this.authService.loginWithGoogle(input);
   }
 
   @Public()

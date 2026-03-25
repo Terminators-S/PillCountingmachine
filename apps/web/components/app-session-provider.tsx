@@ -9,8 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { clearTokens, getAccessToken, setTokens } from '../lib/auth';
-import { provisionDemoSessionForExternalUser } from '../lib/demo-api';
+import { AUTH_STATE_EVENT, clearTokens, getAccessToken } from '../lib/auth';
 import { firebaseAuth, isFirebaseAuthEnabled, hasFirebaseConfig } from '../lib/firebase';
 
 type SessionStatus = 'loading' | 'authenticated' | 'unauthenticated';
@@ -37,43 +36,32 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
 
   useEffect(() => {
-    if (!firebaseReady || !firebaseAuth) {
+    const syncSessionFromStorage = () => {
       const hasStoredSession = Boolean(getAccessToken());
       setStatus(hasStoredSession ? 'authenticated' : 'unauthenticated');
-      return;
+      if (!hasStoredSession) {
+        setUser(null);
+      }
+    };
+
+    syncSessionFromStorage();
+
+    const handleStorage = () => syncSessionFromStorage();
+    window.addEventListener(AUTH_STATE_EVENT, handleStorage);
+    window.addEventListener('storage', handleStorage);
+
+    let unsubscribe: (() => void) | undefined;
+    if (firebaseReady && firebaseAuth) {
+      unsubscribe = onAuthStateChanged(firebaseAuth, () => {
+        syncSessionFromStorage();
+      });
     }
 
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser) => {
-      if (!firebaseUser?.email) {
-        clearTokens();
-        setUser(null);
-        setStatus('unauthenticated');
-        return;
-      }
-
-      if (!firebaseUser.emailVerified) {
-        clearTokens();
-        setUser(null);
-        setStatus('unauthenticated');
-        return;
-      }
-
-      const session = provisionDemoSessionForExternalUser({
-        firebaseUid: firebaseUser.uid,
-        email: firebaseUser.email,
-        fullName: firebaseUser.displayName || firebaseUser.email.split('@')[0] || 'Firebase User',
-      });
-
-      setTokens(session.accessToken, session.refreshToken);
-      setUser({
-        id: session.profile.id,
-        email: session.profile.email,
-        fullName: session.profile.fullName,
-      });
-      setStatus('authenticated');
-    });
-
-    return unsubscribe;
+    return () => {
+      window.removeEventListener(AUTH_STATE_EVENT, handleStorage);
+      window.removeEventListener('storage', handleStorage);
+      unsubscribe?.();
+    };
   }, [firebaseReady]);
 
   async function logout() {

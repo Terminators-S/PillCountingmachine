@@ -9,17 +9,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, registerSchema } from '@pillcount/shared';
 import { z } from 'zod';
 import {
-  createUserWithEmailAndPassword,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
-  updateProfile,
 } from 'firebase/auth';
 import { ApiError, apiRequest, clearStoredApiBaseUrl, getStoredApiBaseUrl, setStoredApiBaseUrl } from '../../../lib/api';
 import { getAccessToken, getRefreshToken, setTokens, syncAuthCookiesFromStorage } from '../../../lib/auth';
-import { provisionDemoSessionForExternalUser } from '../../../lib/demo-api';
 import { firebaseAuth, googleProvider, isFirebaseAuthEnabled, hasFirebaseConfig } from '../../../lib/firebase';
 import { cn } from '../../../lib/utils';
 import { useAppSession } from '../../../components/app-session-provider';
@@ -84,20 +78,6 @@ function isHostedUiSession() {
 
   const hostname = window.location.hostname.toLowerCase();
   return !['localhost', '127.0.0.1'].includes(hostname);
-}
-
-function localizeAuthEmails() {
-  if (firebaseAuth && typeof navigator !== 'undefined') {
-    firebaseAuth.languageCode = navigator.language || 'en';
-  }
-}
-
-function buildEmailActionSettings(path = '/login') {
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://pillcountingmachine.web.app';
-  return {
-    url: `${origin}${path}`,
-    handleCodeInApp: false,
-  } as const;
 }
 
 function AuthHeroPanel({
@@ -192,7 +172,7 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
 
     const storedAccessToken = getAccessToken();
     const storedRefreshToken = getRefreshToken();
-    if (!firebaseEnabled && (storedAccessToken || storedRefreshToken)) {
+    if (storedAccessToken || storedRefreshToken) {
       syncAuthCookiesFromStorage();
       router.replace('/overview');
       return;
@@ -207,10 +187,10 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
 
     const storedApiBaseUrl = getStoredApiBaseUrl();
     setApiBaseUrl(storedApiBaseUrl);
-    if (!storedApiBaseUrl && isHostedUiSession() && !firebaseEnabled) {
+    if (!storedApiBaseUrl && isHostedUiSession()) {
       setConnectionMessage('Enter your public API URL below, then test the connection before signing in.');
     }
-  }, [firebaseEnabled, router, searchParams, status]);
+  }, [router, searchParams, status]);
 
   useEffect(() => {
     setMode(requestedMode);
@@ -251,21 +231,6 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
     return fallback;
   }
 
-  async function finishFirebaseSession(input: { uid: string; email: string | null; fullName: string | null }) {
-    if (!input.email) {
-      throw new Error('Firebase returned a user without an email address.');
-    }
-
-    const session = provisionDemoSessionForExternalUser({
-      firebaseUid: input.uid,
-      email: input.email,
-      fullName: input.fullName || input.email.split('@')[0] || 'Firebase User',
-    });
-
-    setTokens(session.accessToken, session.refreshToken);
-    router.replace('/overview');
-  }
-
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' }
@@ -277,36 +242,7 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
 
   async function handleLogin(values: LoginFormValues) {
     clearUiState();
-    if (firebaseEnabled) {
-      if (!firebaseReady || !firebaseAuth) {
-        setError('Firebase Authentication is enabled, but the web app config is incomplete.');
-        return;
-      }
-      setCredentialBusy(true);
-      try {
-        const credential = await signInWithEmailAndPassword(firebaseAuth, values.email, values.password);
-        await credential.user.reload();
-        const activeUser = firebaseAuth.currentUser ?? credential.user;
-        if (!activeUser.emailVerified) {
-          localizeAuthEmails();
-          await sendEmailVerification(activeUser, buildEmailActionSettings('/login?mode=login')).catch(() => undefined);
-          await signOut(firebaseAuth);
-          setNotice(`Verify ${values.email} before signing in. We sent a verification link to that address.`);
-          return;
-        }
-        await finishFirebaseSession({
-          uid: activeUser.uid,
-          email: activeUser.email,
-          fullName: activeUser.displayName,
-        });
-      } catch (err) {
-        setError(normalizeFirebaseError(err, 'Firebase login failed.'));
-      } finally {
-        setCredentialBusy(false);
-      }
-      return;
-    }
-
+    setCredentialBusy(true);
     try {
       const payload = await apiRequest<{ accessToken: string; refreshToken: string }>('/auth/login', {
         method: 'POST',
@@ -316,37 +252,14 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
       router.replace('/overview');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Login failed');
+    } finally {
+      setCredentialBusy(false);
     }
   }
 
   async function handleRegister(values: RegisterFormValues) {
     clearUiState();
-    if (firebaseEnabled) {
-      if (!firebaseReady || !firebaseAuth) {
-        setError('Firebase Authentication is enabled, but the web app config is incomplete.');
-        return;
-      }
-      setCredentialBusy(true);
-      try {
-        const credential = await createUserWithEmailAndPassword(firebaseAuth, values.email, values.password);
-        if (values.fullName.trim()) {
-          await updateProfile(credential.user, { displayName: values.fullName.trim() });
-        }
-        localizeAuthEmails();
-        await sendEmailVerification(credential.user, buildEmailActionSettings('/login?mode=login'));
-        await signOut(firebaseAuth);
-        loginForm.setValue('email', values.email, { shouldDirty: true });
-        registerForm.reset({ email: values.email, password: '', fullName: '', confirmPassword: '' });
-        switchMode('login');
-        setNotice(`Account created for ${values.email}. Check your inbox and verify your email before signing in.`);
-      } catch (err) {
-        setError(normalizeFirebaseError(err, 'Firebase registration failed.'));
-      } finally {
-        setCredentialBusy(false);
-      }
-      return;
-    }
-
+    setCredentialBusy(true);
     try {
       const payload = await apiRequest<{ accessToken: string; refreshToken: string }>('/auth/register', {
         method: 'POST',
@@ -356,6 +269,8 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
       router.replace('/overview');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Registration failed');
+    } finally {
+      setCredentialBusy(false);
     }
   }
 
@@ -407,43 +322,24 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
     }
     try {
       const credential = await signInWithPopup(firebaseAuth, googleProvider);
-      if (!credential.user.emailVerified) {
-        await signOut(firebaseAuth);
-        setNotice('Use a verified Google account to continue.');
-        return;
+      const idToken = await credential.user.getIdToken();
+
+      if (!idToken) {
+        throw new Error('Google did not return a usable ID token.');
       }
-      await finishFirebaseSession({
-        uid: credential.user.uid,
-        email: credential.user.email,
-        fullName: credential.user.displayName,
+
+      const payload = await apiRequest<{ accessToken: string; refreshToken: string }>('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ idToken })
       });
+      setTokens(payload.accessToken, payload.refreshToken);
+      await signOut(firebaseAuth).catch(() => undefined);
+      router.replace('/overview');
     } catch (err) {
+      await signOut(firebaseAuth).catch(() => undefined);
       setError(normalizeFirebaseError(err, 'Google sign-in failed.'));
     } finally {
       setGoogleBusy(false);
-    }
-  }
-
-  async function handlePasswordReset() {
-    clearUiState();
-
-    if (!firebaseEnabled || !firebaseReady || !firebaseAuth) {
-      setError('Password reset is available only in the Firebase sign-in flow.');
-      return;
-    }
-
-    const email = loginForm.getValues('email').trim();
-    if (!email) {
-      setError('Enter your email first, then request a password reset.');
-      return;
-    }
-
-    try {
-      localizeAuthEmails();
-      await sendPasswordResetEmail(firebaseAuth, email, buildEmailActionSettings('/login?mode=login'));
-      setNotice(`Password reset email sent to ${email}.`);
-    } catch (err) {
-      setError(normalizeFirebaseError(err, 'Password reset failed.'));
     }
   }
 
@@ -539,12 +435,12 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
                     </div>
                     <div>
                       <p className='text-sm font-semibold text-slate-950'>
-                        {mode === 'login' ? 'Verified staff access only' : 'Email verification is required'}
+                        {mode === 'login' ? 'Staff account access' : 'Create a staff account'}
                       </p>
                       <p className='mt-1 text-sm leading-6 text-slate-500'>
                         {mode === 'login'
-                          ? 'Only verified accounts can enter the operations console.'
-                          : 'After registration, we send a verification link before the account can be used.'}
+                          ? 'Sign in with your work account or Google to open the operations console.'
+                          : 'Create a staff account here. Roles can be adjusted later in Users & Roles.'}
                       </p>
                     </div>
                   </div>
@@ -581,14 +477,6 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
                       </div>
                       {loginForm.formState.errors.password ? <p className='mt-1 text-xs text-red-600'>{loginForm.formState.errors.password.message}</p> : null}
                     </div>
-
-                    {firebaseEnabled ? (
-                      <div className='flex justify-end'>
-                        <button type='button' onClick={() => handlePasswordReset()} className='text-sm font-medium text-blue-600 transition-colors hover:text-blue-700'>
-                          Forgot your password?
-                        </button>
-                      </div>
-                    ) : null}
 
                     <Button className='h-14 w-full rounded-2xl text-lg' type='submit' disabled={loginForm.formState.isSubmitting || credentialBusy}>
                       {loginForm.formState.isSubmitting || credentialBusy ? submitBusyLabel : submitLabel}
@@ -696,7 +584,7 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
                   </div>
                 ) : null}
 
-                {!firebaseEnabled ? (
+                {isHostedUiSession() || apiBaseUrl || connectionMessage ? (
                   <details
                     className='rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4'
                     open={Boolean(apiBaseUrl || connectionMessage)}
