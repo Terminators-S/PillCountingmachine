@@ -22,9 +22,10 @@ async function bootstrap() {
   });
 
   const port = Number(process.env.PORT || process.env.API_PORT || 4000);
-  await app.listen(port);
+  const host = String(process.env.API_HOST || process.env.HOST || '0.0.0.0').trim() || '0.0.0.0';
+  await app.listen(port, host);
   // eslint-disable-next-line no-console
-  console.log(`API listening on http://localhost:${port}/api`);
+  console.log(`API listening on http://${host}:${port}/api`);
 }
 
 bootstrap();
