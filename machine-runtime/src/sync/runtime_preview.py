@@ -79,7 +79,6 @@ def encode_preview_frame_as_data_url(frame, max_width: int = 640, jpeg_quality: 
 
 def build_runtime_telemetry_payload(
     *,
-    machine_code: str,
     machine_name: str,
     session_id: str,
     emitted_at_utc: str,
@@ -126,7 +125,6 @@ def build_runtime_telemetry_payload(
         "message": message,
         "latest_error": latest_error,
         "snapshot_data_url": snapshot_data_url,
-        "machine_code": machine_code,
     }
 
 

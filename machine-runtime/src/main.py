@@ -582,7 +582,6 @@ def run() -> int:
                     )
                     live_runtime_publisher.publish(
                         build_runtime_telemetry_payload(
-                            machine_code=runtime_machine_code,
                             machine_name=camera_config.machine_name,
                             session_id=run_id,
                             emitted_at_utc=utc_now_iso(),
@@ -677,7 +676,6 @@ def run() -> int:
 
             live_runtime_publisher.publish(
                 build_runtime_telemetry_payload(
-                    machine_code=runtime_machine_code,
                     machine_name=camera_config.machine_name,
                     session_id=run_id,
                     emitted_at_utc=utc_now_iso(),

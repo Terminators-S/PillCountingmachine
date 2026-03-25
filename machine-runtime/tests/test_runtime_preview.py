@@ -10,6 +10,7 @@ from src.sync.runtime_preview import (  # noqa: E402
     build_machine_runtime_telemetry_endpoint,
     build_runtime_counts_payload,
     build_runtime_preview_settings,
+    build_runtime_telemetry_payload,
 )
 
 
@@ -43,6 +44,33 @@ class RuntimePreviewTests(unittest.TestCase):
         self.assertIsNone(build_runtime_preview_settings("", "key", "pill-counter-pi"))
         self.assertIsNone(build_runtime_preview_settings("http://localhost:4000/api", "", "pill-counter-pi"))
         self.assertIsNone(build_runtime_preview_settings("http://localhost:4000/api", "key", ""))
+
+    def test_build_runtime_telemetry_payload_uses_machine_code_in_url_not_body(self):
+        payload = build_runtime_telemetry_payload(
+            machine_name="pill-counter-pi",
+            session_id="run_1",
+            emitted_at_utc="2026-03-25T16:00:00Z",
+            started_at_utc="2026-03-25T15:59:00Z",
+            ended_at_utc=None,
+            control_state="RUNNING",
+            camera_state="OPEN",
+            camera_index=0,
+            frame_width=1280,
+            frame_height=720,
+            frame_number=12,
+            tracked_object_count=3,
+            fps=5.4,
+            average_confidence=0.8,
+            detector_info={"model_key": "local-train12"},
+            visible_counts_by_label={"tablet": 2},
+            cumulative_counts_by_label={"tablet": 2},
+            message="Visible 2 item(s)",
+            latest_error=None,
+            snapshot_data_url="data:image/jpeg;base64,abc",
+        )
+
+        self.assertNotIn("machine_code", payload)
+        self.assertEqual("pill-counter-pi", payload["machine_name"])
 
 
 if __name__ == "__main__":
