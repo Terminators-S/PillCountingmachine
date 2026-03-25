@@ -58,11 +58,15 @@ class PendingSyncPayloadTests(unittest.TestCase):
         payload = build_pending_sync_payload(session_metadata, final_summary, events)
 
         self.assertEqual("pending_sync", payload["status"])
+        self.assertEqual("pending_sync", payload["sync"]["status"])
+        self.assertEqual(0, payload["sync"]["attempts"])
         self.assertEqual(1, payload["total_count"])
         self.assertEqual(1, len(payload["events"]))
         self.assertEqual([10, 40], payload["events"][0]["previous_centroid"])
         self.assertEqual("tablet", payload["events"][0]["object_label"])
         self.assertEqual("ml", payload["detector"]["mode"])
+        self.assertEqual("live_camera", payload["source_mode"])
+        self.assertEqual("runs/run_20260324_123000", payload["evidence"]["run_directory"])
 
 
 if __name__ == "__main__":

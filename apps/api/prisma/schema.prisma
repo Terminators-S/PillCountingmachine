@@ -156,6 +156,39 @@ model MachineEvent {
   @@index([occurredAt(sort: Desc)])
 }
 
+model MachineRun {
+  id               String   @id @default(uuid())
+  runId            String   @unique
+  machineName      String
+  sourceMode       String
+  sourceLabel      String?
+  startedAt        DateTime
+  completedAt      DateTime
+  totalCount       Int
+  eventCount       Int
+  runtimeStatus    String
+  detectorBackend  String
+  mlRuntimeBackend String?
+  modelFormat      String?
+  modelKey         String?
+  modelPath        String?
+  averageFps       Float?
+  runtimeFps       Float?
+  countResult      Json?
+  camera           Json?
+  detector         Json?
+  roi              Json?
+  line             Json?
+  events           Json?
+  evidence         Json?
+  syncState        Json?
+  receivedAt       DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([completedAt(sort: Desc)])
+  @@index([machineName, completedAt(sort: Desc)])
+}
+
 model PillType {
   id              String                  @id @default(uuid())
   code            String                  @unique

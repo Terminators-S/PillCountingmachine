@@ -32,7 +32,7 @@ from .overlay_ui import (
     validate_count_line,
     validate_roi,
 )
-from .sync import build_pending_sync_payload, write_pending_sync_payload
+from .sync import SyncSettings, build_pending_sync_payload, sync_pending_payload, write_pending_sync_payload
 from .storage import RunRecorder
 from .tracking import CentroidTracker, TrackedObject
 
@@ -57,6 +57,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--detector-catalog-path", default=None, help="Override the legacy ML model catalog path.")
     parser.add_argument("--detector-device", default=None, help="Override detector device, for example cpu or vulkan:0.")
     parser.add_argument("--detector-inference-size", type=int, default=None, help="Override detector inference image size.")
+    parser.add_argument("--sync-api-url", default=None, help="Backend API base URL, for example http://localhost:4000/api.")
+    parser.add_argument("--sync-api-key", default=None, help="API key used for backend machine-run sync.")
+    parser.add_argument(
+        "--sync-timeout-seconds",
+        type=float,
+        default=None,
+        help="HTTP timeout for backend sync attempts. Defaults to PILLCOUNT_SYNC_TIMEOUT_SECONDS or 10.",
+    )
+    parser.add_argument("--no-sync", action="store_true", help="Disable backend sync and leave pending_sync.json for later retry.")
     return parser.parse_args()
 
 
@@ -503,7 +512,49 @@ def run() -> int:
         saved_summary = recorder.finalize(final_summary)
         sync_payload = build_pending_sync_payload(session_metadata, saved_summary, line_counter.events)
         pending_sync_path = write_pending_sync_payload(recorder.run_dir, sync_payload)
-        saved_summary = {**saved_summary, "pending_sync_path": str(pending_sync_path)}
+        sync_api_url = (args.sync_api_url or os.environ.get("PILLCOUNT_SYNC_API_URL") or "").strip()
+        sync_api_key = (args.sync_api_key or os.environ.get("PILLCOUNT_SYNC_API_KEY") or "").strip()
+        sync_timeout_value = args.sync_timeout_seconds or float(os.environ.get("PILLCOUNT_SYNC_TIMEOUT_SECONDS") or 10.0)
+        sync_metadata = {
+            "enabled": False,
+            "status": "pending_sync",
+            "attempts": 0,
+            "last_attempt_at_utc": None,
+            "last_synced_at_utc": None,
+            "last_error": None,
+            "api_base_url": sync_api_url or None,
+            "endpoint": f"{sync_api_url.rstrip('/')}/machine-runs" if sync_api_url else None,
+        }
+        if not args.no_sync and sync_api_url and sync_api_key:
+            sync_result = sync_pending_payload(
+                pending_sync_path,
+                SyncSettings(api_base_url=sync_api_url, api_key=sync_api_key, timeout_seconds=sync_timeout_value),
+            )
+            sync_payload = json.loads(pending_sync_path.read_text(encoding="utf-8"))
+            sync_state = sync_payload.get("sync") or {}
+            sync_metadata = {
+                "enabled": True,
+                "status": sync_state.get("status") or sync_payload.get("status"),
+                "attempts": int(sync_state.get("attempts") or 0),
+                "last_attempt_at_utc": sync_state.get("last_attempt_at_utc"),
+                "last_synced_at_utc": sync_state.get("last_synced_at_utc"),
+                "last_error": sync_state.get("last_error"),
+                "api_base_url": sync_api_url,
+                "endpoint": f"{sync_api_url.rstrip('/')}/machine-runs",
+                "last_result": sync_result,
+            }
+            if sync_result["ok"]:
+                print(f"Synced machine run to backend: {sync_api_url.rstrip('/')}/machine-runs")
+            else:
+                print(f"WARNING: Backend sync failed, pending payload kept for retry: {sync_result['message']}")
+        elif args.no_sync:
+            print("Backend sync disabled for this run. Leaving pending_sync.json for later retry.")
+        elif sync_api_url and not sync_api_key:
+            print("Backend sync URL is set but PILLCOUNT_SYNC_API_KEY is missing. Leaving pending_sync.json for later retry.")
+        else:
+            print("Backend sync not configured. Leaving pending_sync.json for later retry.")
+
+        saved_summary = {**saved_summary, "pending_sync_path": str(pending_sync_path), "sync": sync_metadata}
         recorder.summary_path.write_text(json.dumps(saved_summary, indent=2), encoding="utf-8")
         print("Counting loop finished.")
         print(json.dumps(saved_summary, indent=2))

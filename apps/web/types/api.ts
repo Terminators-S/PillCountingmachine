@@ -154,6 +154,43 @@ export interface EventListResponse {
   rows: MachineEventRow[];
 }
 
+export interface MachineRunRow {
+  id: string;
+  runId: string;
+  machineName: string;
+  sourceMode: string;
+  sourceLabel?: string | null;
+  startedAt: string;
+  completedAt: string;
+  totalCount: number;
+  eventCount: number;
+  runtimeStatus: string;
+  detectorBackend: string;
+  mlRuntimeBackend?: string | null;
+  modelFormat?: string | null;
+  modelKey?: string | null;
+  modelPath?: string | null;
+  averageFps?: number | null;
+  runtimeFps?: number | null;
+  countResult?: Record<string, unknown> | null;
+  camera?: Record<string, unknown> | null;
+  detector?: Record<string, unknown> | null;
+  roi?: Record<string, unknown> | null;
+  line?: Record<string, unknown> | null;
+  events?: Record<string, unknown>[] | null;
+  evidence?: Record<string, unknown> | null;
+  syncState?: Record<string, unknown> | null;
+  receivedAt: string;
+  updatedAt: string;
+}
+
+export interface MachineRunListResponse {
+  page: number;
+  pageSize: number;
+  total: number;
+  rows: MachineRunRow[];
+}
+
 export interface PillType {
   id: string;
   code: string;

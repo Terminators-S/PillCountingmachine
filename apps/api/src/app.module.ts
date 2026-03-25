@@ -17,6 +17,7 @@ import { LiveModule } from './live/live.module';
 import { AdminModule } from './admin/admin.module';
 import { RuntimeModule } from './runtime/runtime.module';
 import { AppSettingsModule } from './app-settings/app-settings.module';
+import { MachineRunsModule } from './machine-runs/machine-runs.module';
 import { AuditMiddleware } from './common/middleware/audit.middleware';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 import { AppController } from './app.controller';
@@ -41,7 +42,8 @@ import { AppController } from './app.controller';
     LiveModule,
     AdminModule,
     AppSettingsModule,
-    RuntimeModule
+    RuntimeModule,
+    MachineRunsModule
   ]
 })
 export class AppModule implements NestModule {

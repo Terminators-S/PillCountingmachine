@@ -17,6 +17,8 @@ import type {
   Lot,
   Machine,
   MachineEventRow,
+  MachineRunListResponse,
+  MachineRunRow,
   MeProfile,
   PillType,
   ReportsOverview,
@@ -44,6 +46,7 @@ type DemoState = {
   roles: RoleRow[];
   machines: Machine[];
   machineEvents: MachineEventRow[];
+  machineRuns: MachineRunRow[];
   pillTypes: PillType[];
   lots: Lot[];
   balances: InventoryBalance[];
@@ -615,6 +618,67 @@ function buildSeedState(): DemoState {
     }
   ];
 
+  const machineRuns: MachineRunRow[] = [
+    {
+      id: 'run_sync_001',
+      runId: 'run_20260325_081500',
+      machineName: 'MCH-001',
+      sourceMode: 'live_camera',
+      sourceLabel: 'camera:0',
+      startedAt: offsetIso(-1),
+      completedAt: offsetIso(-1),
+      totalCount: 248,
+      eventCount: 248,
+      runtimeStatus: 'COMPLETED',
+      detectorBackend: 'ml',
+      mlRuntimeBackend: 'ncnn',
+      modelFormat: 'ncnn',
+      modelKey: 'local-train12',
+      modelPath: 'models/best_ncnn_model',
+      averageFps: 22.4,
+      runtimeFps: 22.4,
+      countResult: { total_count: 248, event_count: 248 },
+      camera: { camera_index: 0, resolution: { width: 1280, height: 720 }, fps: 30 },
+      detector: { backend: 'ml', runtime_backend: 'ncnn' },
+      roi: { x: 140, y: 120, width: 980, height: 320 },
+      line: { start: [0, 150], end: [980, 150], allowed_direction: 'down', orientation: 'horizontal' },
+      events: [],
+      evidence: { run_directory: 'runs/run_20260325_081500' },
+      syncState: { status: 'synced', attempts: 1 },
+      receivedAt: offsetIso(-1),
+      updatedAt: offsetIso(-1)
+    },
+    {
+      id: 'run_sync_002',
+      runId: 'run_20260324_173000',
+      machineName: 'MCH-002',
+      sourceMode: 'replay',
+      sourceLabel: 'datasets/test-clips/example.mp4',
+      startedAt: offsetIso(-2),
+      completedAt: offsetIso(-2),
+      totalCount: 116,
+      eventCount: 116,
+      runtimeStatus: 'COMPLETED',
+      detectorBackend: 'contour',
+      mlRuntimeBackend: null,
+      modelFormat: null,
+      modelKey: null,
+      modelPath: null,
+      averageFps: 31.2,
+      runtimeFps: 31.2,
+      countResult: { total_count: 116, event_count: 116 },
+      camera: { camera_index: -1, resolution: { width: 1280, height: 720 }, fps: 30 },
+      detector: { backend: 'contour' },
+      roi: { x: 140, y: 120, width: 980, height: 320 },
+      line: { start: [0, 150], end: [980, 150], allowed_direction: 'down', orientation: 'horizontal' },
+      events: [],
+      evidence: { run_directory: 'runs/run_20260324_173000' },
+      syncState: { status: 'synced', attempts: 1 },
+      receivedAt: offsetIso(-2),
+      updatedAt: offsetIso(-2)
+    }
+  ];
+
   const movements: InventoryMovement[] = [
     {
       id: 'txn_receive_amox',
@@ -700,6 +764,7 @@ function buildSeedState(): DemoState {
     roles,
     machines,
     machineEvents,
+    machineRuns,
     pillTypes,
     lots,
     balances,
@@ -1605,6 +1670,30 @@ export async function demoApiRequest<T>(path: string, init: RequestInit = {}): P
     });
     const start = Math.max(0, (page - 1) * pageSize);
     const payload: EventListResponse = {
+      page,
+      pageSize,
+      total: filtered.length,
+      rows: clone(filtered.slice(start, start + pageSize))
+    };
+    return payload as T;
+  }
+
+  if (method === 'GET' && pathname === '/machine-runs') {
+    const page = Number(url.searchParams.get('page') || '1');
+    const pageSize = Number(url.searchParams.get('pageSize') || '50');
+    const query = (url.searchParams.get('query') || '').trim().toLowerCase();
+    const runtimeStatus = (url.searchParams.get('runtimeStatus') || '').trim().toLowerCase();
+    const filtered = state.machineRuns.filter((run) => {
+      const matchesQuery =
+        !query ||
+        run.machineName.toLowerCase().includes(query) ||
+        run.runId.toLowerCase().includes(query) ||
+        String(run.modelKey || '').toLowerCase().includes(query);
+      const matchesStatus = !runtimeStatus || run.runtimeStatus.toLowerCase().includes(runtimeStatus);
+      return matchesQuery && matchesStatus;
+    });
+    const start = Math.max(0, (page - 1) * pageSize);
+    const payload: MachineRunListResponse = {
       page,
       pageSize,
       total: filtered.length,

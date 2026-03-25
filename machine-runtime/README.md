@@ -12,7 +12,7 @@ This folder is the active path for machine-side work. It is designed for one Ras
 - track pills across frames
 - count each pill exactly once using a virtual count line
 - save local debug evidence and run summaries
-- prepare clean handoff points for future backend sync
+- sync completed runs to the backend when configured, while staying safe offline
 
 ## Current Runtime Layout
 
@@ -104,13 +104,12 @@ Writes `session.json`, `summary.json`, `events.csv`, debug frames, and crossing-
 
 ## Deferred In This Runtime
 
-- backend sync implementation
 - remote orchestration
 - multi-pill classification
 - mixed-lane or multi-camera support
 - advanced model serving inside this package
 
-The empty `src/sync/` and `src/utils/` packages are intentional reserved seams, not active feature areas yet.
+The runtime now has a minimal machine-run sync seam in `src/sync/`, but it stays additive. Counting still completes locally even when the backend is unavailable.
 
 ## Raspberry Pi Bring-Up
 
@@ -410,6 +409,61 @@ When ML mode is active, the event and summary files also include:
 - counted event confidence and source model fields
 - runtime FPS and count result summary
 - session, summary, debug-frame, and event-frame evidence paths
+
+When backend sync is configured, the local run artifacts also record:
+
+- `summary.json -> sync`
+- `pending_sync.json -> status` and `pending_sync.json -> sync`
+- whether the run is still pending, failed to sync, or has been synced successfully
+
+## Backend Sync
+
+The machine-runtime can now push completed run payloads to the API without changing the local counting flow.
+
+Required backend preparation:
+
+```bash
+cd ~/PillCountingmachine
+npm run prisma:push
+npm run prisma:generate
+npm run dev:api
+```
+
+Expected API endpoint:
+
+- `POST /api/machine-runs` for machine-side sync
+- `GET /api/machine-runs` for the dashboard history page
+
+Set the sync environment on the export machine or Raspberry Pi:
+
+```bash
+cd ~/PillCountingmachine/machine-runtime
+source .venv/bin/activate
+export PILLCOUNT_SYNC_API_URL=http://<api-host>:4000/api
+export PILLCOUNT_SYNC_API_KEY=<api-key>
+```
+
+Generate a run and attempt immediate sync:
+
+```bash
+bash scripts/run_machine_runtime.sh --detector-mode contour --max-frames 300
+```
+
+If the API is offline or unreachable, the run still completes locally and `runs/run_<timestamp>/pending_sync.json` is kept for retry.
+
+Retry pending payloads later:
+
+```bash
+cd ~/PillCountingmachine/machine-runtime
+source .venv/bin/activate
+python scripts/sync_pending_runs.py --runs-path runs
+```
+
+Verify the sync landed:
+
+1. open the dashboard page at `/machine-runs`
+2. confirm the new `run_id`, `machine_name`, detector/backend, count, and runtime status appear
+3. or call `GET /api/machine-runs?page=1&pageSize=20`
 
 ## Validation And Next Step
 
