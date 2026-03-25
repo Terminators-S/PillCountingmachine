@@ -135,7 +135,7 @@ class RuntimePreviewSettings:
     api_base_url: str
     api_key: str
     machine_code: str
-    timeout_seconds: float = 1.5
+    timeout_seconds: float = 5.0
     publish_interval_seconds: float = 1.5
 
     @property
@@ -189,6 +189,8 @@ class LiveRuntimePublisher:
         self._stop_requested = False
         self._flush_on_close = False
         self._next_capture_at = 0.0
+        self._consecutive_failures = 0
+        self._last_failure_log_at = 0.0
         self._thread = threading.Thread(target=self._worker, name="pillcount-live-runtime-publisher", daemon=True)
         self._thread.start()
 
@@ -229,9 +231,14 @@ class LiveRuntimePublisher:
             if payload is not None:
                 try:
                     post_machine_runtime_telemetry(payload, self.settings)
-                except Exception:
+                    self._consecutive_failures = 0
+                except Exception as exc:
                     # Preview sync must never block or break the counting loop.
-                    pass
+                    self._consecutive_failures += 1
+                    now_monotonic = time.monotonic()
+                    if self._consecutive_failures == 1 or now_monotonic - self._last_failure_log_at >= 30.0:
+                        self._last_failure_log_at = now_monotonic
+                        print(f"WARNING: Live preview publish failed: {exc}")
 
             if should_exit_after_send:
                 return
@@ -242,7 +249,7 @@ def build_runtime_preview_settings(
     api_key: str,
     machine_code: str,
     *,
-    timeout_seconds: float = 1.5,
+    timeout_seconds: float = 5.0,
     publish_interval_seconds: float = 1.5,
 ) -> RuntimePreviewSettings | None:
     normalized_url = str(api_base_url or "").strip()
@@ -258,4 +265,3 @@ def build_runtime_preview_settings(
         timeout_seconds=float(timeout_seconds),
         publish_interval_seconds=float(publish_interval_seconds),
     )
-

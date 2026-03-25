@@ -42,34 +42,29 @@ type NavItem = {
   label: string;
   icon: LucideIcon;
   group: 'workspace' | 'operations' | 'system';
+  tier: 'primary' | 'secondary';
   disabled?: boolean;
 };
 
 const SIDEBAR_STATE_KEY = 'pillcount.sidebarCollapsed';
 
 const baseNavItems: NavItem[] = [
-  { href: '/overview', label: 'Overview', icon: Home, group: 'workspace' },
-  { href: '/live', label: 'Live Dashboard', icon: Activity, group: 'workspace' },
-  { href: '/handbook', label: 'Machine Handbook', icon: BookOpen, group: 'workspace' },
-  { href: '/jobs', label: 'Jobs / Sessions', icon: ClipboardList, group: 'operations' },
-  { href: '/inventory', label: 'Inventory', icon: Package, group: 'operations' },
-  { href: '/lots-expiry', label: 'Lots & Expiry', icon: FileSearch, group: 'operations' },
-  { href: '/machines', label: 'Machines Fleet', icon: Truck, group: 'operations' },
-  { href: '/machine-runs', label: 'Machine Runs', icon: History, group: 'operations' },
-  { href: '/maintenance', label: 'Maintenance', icon: Wrench, group: 'operations', disabled: true },
-  { href: '/reports', label: 'Reports', icon: FileBarChart2, group: 'operations' },
-  { href: '/users-roles', label: 'Users & Roles', icon: Users, group: 'system' },
-  { href: '/admin', label: 'Admin', icon: Database, group: 'system' },
-  { href: '/settings', label: 'Settings', icon: Cog, group: 'system' },
-  { href: '/audit-log', label: 'Audit Log', icon: Shield, group: 'system' },
-  { href: '/notifications', label: 'Notifications', icon: Bell, group: 'system', disabled: true }
+  { href: '/live', label: 'Machine Control', icon: Activity, group: 'workspace', tier: 'primary' },
+  { href: '/machine-runs', label: 'Run History', icon: History, group: 'operations', tier: 'primary' },
+  { href: '/overview', label: 'Overview', icon: Home, group: 'workspace', tier: 'secondary' },
+  { href: '/handbook', label: 'Machine Handbook', icon: BookOpen, group: 'workspace', tier: 'secondary' },
+  { href: '/jobs', label: 'Jobs / Sessions', icon: ClipboardList, group: 'operations', tier: 'secondary' },
+  { href: '/inventory', label: 'Inventory', icon: Package, group: 'operations', tier: 'secondary' },
+  { href: '/lots-expiry', label: 'Lots & Expiry', icon: FileSearch, group: 'operations', tier: 'secondary' },
+  { href: '/machines', label: 'Machines Fleet', icon: Truck, group: 'operations', tier: 'secondary' },
+  { href: '/maintenance', label: 'Maintenance', icon: Wrench, group: 'operations', tier: 'secondary', disabled: true },
+  { href: '/reports', label: 'Reports', icon: FileBarChart2, group: 'operations', tier: 'secondary' },
+  { href: '/users-roles', label: 'Users & Roles', icon: Users, group: 'system', tier: 'secondary' },
+  { href: '/admin', label: 'Admin', icon: Database, group: 'system', tier: 'secondary' },
+  { href: '/settings', label: 'Settings', icon: Cog, group: 'system', tier: 'secondary' },
+  { href: '/audit-log', label: 'Audit Log', icon: Shield, group: 'system', tier: 'secondary' },
+  { href: '/notifications', label: 'Notifications', icon: Bell, group: 'system', tier: 'secondary', disabled: true }
 ];
-
-const navGroups = [
-  { key: 'workspace', label: 'Workspace', icon: LayoutGrid },
-  { key: 'operations', label: 'Operations', icon: Activity },
-  { key: 'system', label: 'System', icon: Shield }
-] as const;
 
 function buildInitials(value: string) {
   return (
@@ -109,15 +104,11 @@ export function AppShell({
 
   const navItems = useMemo<NavItem[]>(() => [...baseNavItems], []);
   const activeItem = useMemo(() => navItems.find((item) => pathname.startsWith(item.href)) || navItems[0], [navItems, pathname]);
-  const groupedNavItems = useMemo(
-    () =>
-      navGroups
-        .map((group) => ({
-          ...group,
-          items: navItems.filter((item) => item.group === group.key)
-        }))
-        .filter((group) => group.items.length > 0),
-    [navItems]
+  const primaryNavItems = useMemo(() => navItems.filter((item) => item.tier === 'primary'), [navItems]);
+  const secondaryNavItems = useMemo(() => navItems.filter((item) => item.tier === 'secondary'), [navItems]);
+  const activeSecondaryItem = useMemo(
+    () => secondaryNavItems.find((item) => pathname.startsWith(item.href)) || null,
+    [pathname, secondaryNavItems]
   );
 
   useEffect(() => {
@@ -142,6 +133,38 @@ export function AppShell({
   const brandInitials = buildInitials(storeName);
   const ActiveIcon = activeItem.icon;
   const roleSummary = me?.roles?.join(' • ') || 'Operator workspace';
+
+  const renderNavItem = (item: NavItem) => {
+    const Icon = item.icon;
+    const active = pathname.startsWith(item.href);
+    return (
+      <Link
+        key={item.href}
+        href={item.disabled ? '#' : item.href}
+        title={item.label}
+        className={cn(
+          'group flex items-center rounded-xl text-sm transition-all duration-200',
+          sidebarCollapsed ? 'justify-center px-2 py-2' : 'gap-3 px-2.5 py-2',
+          item.disabled ? 'pointer-events-none opacity-35' : 'hover:bg-slate-950/5 dark:hover:bg-white/5',
+          active
+            ? 'border border-emerald-200 bg-[linear-gradient(135deg,rgba(13,148,136,0.12),rgba(37,99,235,0.08))] text-slate-950 shadow-sm dark:border-emerald-500/20 dark:text-white'
+            : 'border border-transparent text-slate-600 dark:text-slate-300'
+        )}
+      >
+        <span
+          className={cn(
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors',
+            active
+              ? 'border-emerald-200 bg-white text-emerald-700 dark:border-emerald-500/20 dark:bg-slate-900 dark:text-emerald-300'
+              : 'border-border/70 bg-white/75 text-slate-500 group-hover:text-slate-900 dark:bg-slate-950/50 dark:text-slate-300'
+          )}
+        >
+          <Icon className='h-4 w-4' />
+        </span>
+        {!sidebarCollapsed ? <p className='truncate font-semibold'>{item.label}</p> : null}
+      </Link>
+    );
+  };
 
   return (
     <div className='min-h-screen'>
@@ -190,50 +213,35 @@ export function AppShell({
             </div>
 
             <nav className='mt-3 flex-1 space-y-3 overflow-y-auto pr-1'>
-              {groupedNavItems.map((group) => {
-                const GroupIcon = group.icon;
-                return (
-                  <div key={group.key} className='space-y-1'>
-                    {!sidebarCollapsed ? (
-                      <div className='flex items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                        <GroupIcon className='h-3.5 w-3.5' />
-                        <span>{group.label}</span>
-                      </div>
-                    ) : null}
-                    {group.items.map((item) => {
-                      const Icon = item.icon;
-                      const active = pathname.startsWith(item.href);
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.disabled ? '#' : item.href}
-                          title={item.label}
-                          className={cn(
-                            'group flex items-center rounded-xl text-sm transition-all duration-200',
-                            sidebarCollapsed ? 'justify-center px-2 py-2' : 'gap-3 px-2.5 py-2',
-                            item.disabled ? 'pointer-events-none opacity-35' : 'hover:bg-slate-950/5 dark:hover:bg-white/5',
-                            active
-                              ? 'border border-emerald-200 bg-[linear-gradient(135deg,rgba(13,148,136,0.12),rgba(37,99,235,0.08))] text-slate-950 shadow-sm dark:border-emerald-500/20 dark:text-white'
-                              : 'border border-transparent text-slate-600 dark:text-slate-300'
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors',
-                              active
-                                ? 'border-emerald-200 bg-white text-emerald-700 dark:border-emerald-500/20 dark:bg-slate-900 dark:text-emerald-300'
-                                : 'border-border/70 bg-white/75 text-slate-500 group-hover:text-slate-900 dark:bg-slate-950/50 dark:text-slate-300'
-                            )}
-                          >
-                            <Icon className='h-4 w-4' />
-                          </span>
-                          {!sidebarCollapsed ? <p className='truncate font-semibold'>{item.label}</p> : null}
-                        </Link>
-                      );
-                    })}
+              <div className='space-y-1'>
+                {!sidebarCollapsed ? (
+                  <div className='flex items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                    <LayoutGrid className='h-3.5 w-3.5' />
+                    <span>Machine</span>
                   </div>
-                );
-              })}
+                ) : null}
+                {primaryNavItems.map((item) => renderNavItem(item))}
+              </div>
+
+              {secondaryNavItems.length ? (
+                <details
+                  className='space-y-2 rounded-2xl border border-border/70 bg-white/55 p-2 dark:bg-slate-950/35'
+                  open={Boolean(activeSecondaryItem)}
+                >
+                  <summary className={cn('cursor-pointer list-none rounded-xl px-2 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200', sidebarCollapsed && 'text-center')}>
+                    {sidebarCollapsed ? <Cog className='mx-auto h-4 w-4' /> : 'More tools'}
+                  </summary>
+
+                  <div className='space-y-1'>
+                    {!sidebarCollapsed ? (
+                      <p className='px-2 text-xs text-muted-foreground'>
+                        Everything else stays here so the main machine controls stay easy to reach.
+                      </p>
+                    ) : null}
+                    {secondaryNavItems.map((item) => renderNavItem(item))}
+                  </div>
+                </details>
+              ) : null}
             </nav>
 
             <div className={cn('surface-subtle mt-2', sidebarCollapsed ? 'p-2.5 text-center' : 'p-3')}>
@@ -310,8 +318,8 @@ export function AppShell({
           <div className='px-3 pt-3 lg:hidden lg:px-6'>
             <div className='surface-panel overflow-x-auto p-1.5'>
               <div className='flex gap-2'>
-                {navItems
-                  .filter((item) => !item.disabled)
+                {[...primaryNavItems, ...(activeSecondaryItem ? [activeSecondaryItem] : [])]
+                  .filter((item, index, items) => !item.disabled && items.findIndex((entry) => entry.href === item.href) === index)
                   .map((item) => {
                     const Icon = item.icon;
                     const active = pathname.startsWith(item.href);
