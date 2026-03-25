@@ -1,13 +1,13 @@
 {
   "roi": {
-    "x": 280,
-    "y": 120,
-    "width": 720,
-    "height": 420
+    "x": 240,
+    "y": 90,
+    "width": 800,
+    "height": 480
   },
   "count_line": {
-    "start": [60, 210],
-    "end": [660, 210],
+    "start": [100, 240],
+    "end": [700, 240],
     "allowed_direction": "down"
   },
   "detector": {
