@@ -1,6 +1,6 @@
 """Backend sync helpers for local-first runs and retry-safe upload recovery."""
 
-from .client import SyncSettings, build_machine_runs_endpoint, discover_pending_sync_payloads, sync_pending_payload, sync_pending_payloads
+from .client import SyncSettings, build_machine_runs_endpoint, discover_pending_sync_payloads, sync_pending_payload, sync_pending_payloads, utc_now_iso
 from .payloads import build_pending_sync_payload, serialize_crossing_event, write_pending_sync_payload
 from .remote_control import (
     MachineControlSettings,
@@ -37,5 +37,6 @@ __all__ = [
     "serialize_crossing_event",
     "sync_pending_payload",
     "sync_pending_payloads",
+    "utc_now_iso",
     "write_pending_sync_payload",
 ]
