@@ -56,6 +56,29 @@ class RemoteControlTests(unittest.TestCase):
         self.assertEqual(130, exit_code)
         shutdown_mock.assert_called_once_with("Agent interrupted by operator.")
 
+    def test_apply_runtime_overrides_maps_remote_preview_timing_to_env(self):
+        settings = MachineControlSettings(
+            api_base_url="http://localhost:4000/api",
+            api_key="key",
+            machine_code="pill-counter-pi",
+        )
+        agent = RemoteMachineAgent(settings, start_command=["bash", "scripts/start_machine.sh"], workdir=PROJECT_ROOT)
+        env = {}
+
+        agent._apply_runtime_overrides(
+            env,
+            {
+                "cameraIndex": 1,
+                "modelKey": "local-train12",
+                "telemetryIntervalMs": 750,
+                "snapshotIntervalMs": 1500,
+            },
+        )
+
+        self.assertEqual("1", env["PILLCOUNT_CAMERA_INDEX"])
+        self.assertEqual("local-train12", env["PILLCOUNT_MODEL_KEY"])
+        self.assertEqual("0.75", env["PILLCOUNT_LIVE_PREVIEW_INTERVAL_SECONDS"])
+
 
 if __name__ == "__main__":
     unittest.main()

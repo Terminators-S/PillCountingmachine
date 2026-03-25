@@ -198,6 +198,8 @@ class RemoteMachineAgent:
     def _apply_runtime_overrides(self, env: dict[str, str], config: dict[str, Any]) -> None:
         camera_index = config.get("cameraIndex")
         model_key = config.get("modelKey")
+        telemetry_interval_ms = config.get("telemetryIntervalMs")
+        snapshot_interval_ms = config.get("snapshotIntervalMs")
         if camera_index is None:
             env.pop("PILLCOUNT_CAMERA_INDEX", None)
         else:
@@ -207,6 +209,21 @@ class RemoteMachineAgent:
             env["PILLCOUNT_MODEL_KEY"] = str(model_key)
         else:
             env.pop("PILLCOUNT_MODEL_KEY", None)
+
+        interval_candidates: list[float] = []
+        for raw_value in (telemetry_interval_ms, snapshot_interval_ms):
+            try:
+                numeric_value = float(raw_value)
+            except (TypeError, ValueError):
+                continue
+            if numeric_value > 0:
+                interval_candidates.append(numeric_value / 1000.0)
+
+        if interval_candidates:
+            effective_interval = max(0.25, min(interval_candidates))
+            env["PILLCOUNT_LIVE_PREVIEW_INTERVAL_SECONDS"] = f"{effective_interval:.2f}"
+        else:
+            env.pop("PILLCOUNT_LIVE_PREVIEW_INTERVAL_SECONDS", None)
 
 
 def build_machine_control_settings(

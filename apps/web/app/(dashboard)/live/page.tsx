@@ -204,7 +204,7 @@ export default function LiveDashboardPage() {
           modelKey: form.modelKey || undefined,
           cameraIndex: toOptionalNumber(form.cameraIndex),
           telemetryIntervalMs: 750,
-          snapshotIntervalMs: 1500
+          snapshotIntervalMs: 750
         })
       });
     },

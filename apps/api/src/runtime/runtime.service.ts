@@ -1416,6 +1416,8 @@ export class RuntimeService implements OnModuleDestroy {
     return {
       cameraIndex: input.cameraIndex ?? null,
       modelKey: input.modelKey?.trim() || null,
+      telemetryIntervalMs: input.telemetryIntervalMs ?? null,
+      snapshotIntervalMs: input.snapshotIntervalMs ?? null,
       displayName: input.displayName?.trim() || null,
       location: input.location?.trim() || null,
       firmwareVersion: input.firmwareVersion?.trim() || null
