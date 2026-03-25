@@ -480,10 +480,10 @@ def run() -> int:
         sync_api_key = (args.sync_api_key or os.environ.get("PILLCOUNT_SYNC_API_KEY") or "").strip()
         sync_timeout_value = args.sync_timeout_seconds or float(os.environ.get("PILLCOUNT_SYNC_TIMEOUT_SECONDS") or 10.0)
         live_preview_enabled = env_truthy("PILLCOUNT_LIVE_PREVIEW_ENABLED", True)
-        live_preview_interval = float(os.environ.get("PILLCOUNT_LIVE_PREVIEW_INTERVAL_SECONDS") or 1.5)
-        live_preview_timeout = float(os.environ.get("PILLCOUNT_LIVE_PREVIEW_TIMEOUT_SECONDS") or max(5.0, min(sync_timeout_value, 10.0)))
-        live_preview_max_width = int(os.environ.get("PILLCOUNT_LIVE_PREVIEW_MAX_WIDTH") or 640)
-        live_preview_quality = int(os.environ.get("PILLCOUNT_LIVE_PREVIEW_JPEG_QUALITY") or 60)
+        live_preview_interval = float(os.environ.get("PILLCOUNT_LIVE_PREVIEW_INTERVAL_SECONDS") or 2.0)
+        live_preview_timeout = float(os.environ.get("PILLCOUNT_LIVE_PREVIEW_TIMEOUT_SECONDS") or max(15.0, min(sync_timeout_value, 20.0)))
+        live_preview_max_width = int(os.environ.get("PILLCOUNT_LIVE_PREVIEW_MAX_WIDTH") or 320)
+        live_preview_quality = int(os.environ.get("PILLCOUNT_LIVE_PREVIEW_JPEG_QUALITY") or 40)
         runtime_machine_code = (os.environ.get("PILLCOUNT_MACHINE_CODE") or camera_config.machine_name).strip()
         live_preview_settings = None
         if not args.no_sync and live_preview_enabled:
