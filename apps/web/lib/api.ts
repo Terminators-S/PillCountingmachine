@@ -8,6 +8,23 @@ const FALLBACK_STATUS_CODES = new Set([404, 502, 503, 504]);
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
 let preferredApiBaseUrl: string | null = null;
 
+function looksLikeHtmlDocument(value: string) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized.startsWith('<!doctype html') || normalized.startsWith('<html');
+}
+
+function getFriendlyApiErrorMessage(path: string, status: number, payload: string) {
+  if (!looksLikeHtmlDocument(payload)) {
+    return String(payload || 'Request failed');
+  }
+
+  if (typeof window !== 'undefined' && !LOCAL_HOSTNAMES.has(window.location.hostname)) {
+    return `The hosted UI cannot reach the support API yet. Open Advanced connection and enter your public API URL before using ${path.replace(/^\//, '')}.`;
+  }
+
+  return `The app reached a webpage instead of the API while calling ${path.replace(/^\//, '')}. Check the API base URL and try again.`;
+}
+
 function normalizeApiBaseUrl(url: string) {
   return String(url).trim().replace(/\/+$/, '');
 }
@@ -183,7 +200,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, retryA
     if (typeof payload === 'object' && payload !== null) {
       throw new ApiError((payload as any).message || 'Request failed', response.status, (payload as any).code, payload);
     }
-    throw new ApiError(String(payload || 'Request failed'), response.status);
+    throw new ApiError(getFriendlyApiErrorMessage(path, response.status, String(payload || 'Request failed')), response.status);
   }
 
   return parseResponse(response) as Promise<T>;
@@ -200,7 +217,7 @@ export async function apiBlob(path: string, init: RequestInit = {}, retryAuth = 
     if (typeof payload === 'object' && payload !== null) {
       throw new ApiError((payload as any).message || 'Request failed', response.status, (payload as any).code, payload);
     }
-    throw new ApiError(String(payload || 'Request failed'), response.status);
+    throw new ApiError(getFriendlyApiErrorMessage(path, response.status, String(payload || 'Request failed')), response.status);
   }
 
   return response.blob();

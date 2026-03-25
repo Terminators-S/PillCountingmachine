@@ -77,6 +77,15 @@ function resolveAuthMode(mode: string | null | undefined, fallback: AuthMode): A
   return mode === 'register' ? 'register' : fallback;
 }
 
+function isHostedUiSession() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const hostname = window.location.hostname.toLowerCase();
+  return !['localhost', '127.0.0.1'].includes(hostname);
+}
+
 function localizeAuthEmails() {
   if (firebaseAuth && typeof navigator !== 'undefined') {
     firebaseAuth.languageCode = navigator.language || 'en';
@@ -196,7 +205,11 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
       return;
     }
 
-    setApiBaseUrl(getStoredApiBaseUrl());
+    const storedApiBaseUrl = getStoredApiBaseUrl();
+    setApiBaseUrl(storedApiBaseUrl);
+    if (!storedApiBaseUrl && isHostedUiSession() && !firebaseEnabled) {
+      setConnectionMessage('Enter your public API URL below, then test the connection before signing in.');
+    }
   }, [firebaseEnabled, router, searchParams, status]);
 
   useEffect(() => {
@@ -684,12 +697,18 @@ function LoginPageContent({ initialMode = 'login' }: { initialMode?: AuthMode })
                 ) : null}
 
                 {!firebaseEnabled ? (
-                  <details className='rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4' open={Boolean(apiBaseUrl || connectionMessage)}>
+                  <details
+                    className='rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4'
+                    open={Boolean(apiBaseUrl || connectionMessage)}
+                  >
                     <summary className='flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-900'>
                       <SlidersHorizontal className='h-4 w-4 text-muted-foreground' />
                       Advanced connection
                     </summary>
                     <div className='mt-3 space-y-3'>
+                      <p className='text-xs text-muted-foreground'>
+                        Hosted UI needs the real support API URL to reach login, Pi remote control, and live runtime data.
+                      </p>
                       <Input
                         value={apiBaseUrl}
                         onChange={(event) => setApiBaseUrl(event.target.value)}
