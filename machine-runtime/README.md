@@ -632,6 +632,37 @@ sudo systemctl status pillcount-machine-agent.service
 sudo journalctl -u pillcount-machine-agent.service -f
 ```
 
+### Boot straight into the ML runtime and still keep website control
+
+If you want the Raspberry Pi to start counting immediately after power-on, keep
+the Pi agent service enabled and add this to `config/pi-machine.env`:
+
+```bash
+PILLCOUNT_AUTOSTART_ON_BOOT=1
+```
+
+Then enable and restart the Pi agent service:
+
+```bash
+cd ~/PillCountingmachine/machine-runtime
+sudo bash scripts/install_pi_agent_service.sh --user "$USER"
+sudo systemctl enable pillcount-machine-agent.service
+sudo systemctl restart pillcount-machine-agent.service
+sudo systemctl status pillcount-machine-agent.service --no-pager
+```
+
+What this mode does:
+
+- the Pi agent starts automatically after boot
+- the Pi agent immediately launches `scripts/start_machine.sh`
+- the local Pi preview and ML loop begin without waiting for the website
+- the `/live` page can still monitor the preview and later stop or restart the machine
+
+Recommended for this mode:
+
+- use only `pillcount-machine-agent.service`
+- do not also enable `pillcount-machine.service`
+
 How it works:
 
 - the website sends `POST /api/machine-runtime/:machineCode/start` or `POST /api/machine-runtime/:machineCode/stop`

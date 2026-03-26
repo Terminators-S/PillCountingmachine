@@ -79,6 +79,27 @@ class RemoteControlTests(unittest.TestCase):
         self.assertEqual("local-train12", env["PILLCOUNT_MODEL_KEY"])
         self.assertEqual("0.75", env["PILLCOUNT_LIVE_PREVIEW_INTERVAL_SECONDS"])
 
+    def test_run_remote_machine_agent_autostarts_runtime_when_enabled(self):
+        settings = MachineControlSettings(
+            api_base_url="http://localhost:4000/api",
+            api_key="key",
+            machine_code="pill-counter-pi",
+            timeout_seconds=0.1,
+            poll_interval_seconds=0.1,
+            autostart_on_launch=True,
+        )
+
+        with (
+            patch.object(RemoteMachineAgent, "autostart_runtime") as autostart_mock,
+            patch("src.sync.remote_control.post_machine_runtime_control_heartbeat", side_effect=KeyboardInterrupt),
+            patch.object(RemoteMachineAgent, "shutdown") as shutdown_mock,
+        ):
+            exit_code = run_remote_machine_agent(settings, start_command=["bash", "scripts/start_machine.sh"], workdir=PROJECT_ROOT)
+
+        self.assertEqual(130, exit_code)
+        autostart_mock.assert_called_once_with()
+        shutdown_mock.assert_called_once_with("Agent interrupted by operator.")
+
 
 if __name__ == "__main__":
     unittest.main()

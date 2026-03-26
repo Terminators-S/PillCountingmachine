@@ -34,6 +34,7 @@ class MachineControlSettings:
     machine_code: str
     timeout_seconds: float = 5.0
     poll_interval_seconds: float = 2.0
+    autostart_on_launch: bool = False
 
     @property
     def heartbeat_endpoint(self) -> str:
@@ -155,6 +156,14 @@ class RemoteMachineAgent:
             self.last_error = f"Failed to start machine runtime: {exc}"
             self.current_message = self.last_error
 
+    def autostart_runtime(self) -> None:
+        if self.is_running():
+            return
+
+        self.start_runtime(0, {})
+        if self.runtime_state in {"STARTING", "RUNNING"}:
+            self.current_message = "Auto-starting machine runtime after boot."
+
     def stop_runtime(self, command_version: int) -> None:
         try:
             if self.is_running() and self.process is not None:
@@ -233,6 +242,7 @@ def build_machine_control_settings(
     *,
     timeout_seconds: float = 5.0,
     poll_interval_seconds: float = 2.0,
+    autostart_on_launch: bool = False,
 ) -> MachineControlSettings | None:
     normalized_url = str(api_base_url or "").strip()
     normalized_key = str(api_key or "").strip()
@@ -246,6 +256,7 @@ def build_machine_control_settings(
         machine_code=normalized_machine_code,
         timeout_seconds=float(timeout_seconds),
         poll_interval_seconds=float(poll_interval_seconds),
+        autostart_on_launch=bool(autostart_on_launch),
     )
 
 
@@ -253,6 +264,9 @@ def run_remote_machine_agent(settings: MachineControlSettings, *, start_command:
     agent = RemoteMachineAgent(settings, start_command=start_command, workdir=workdir)
     print(f"Remote machine agent online for {settings.machine_code}")
     print(f"Heartbeat endpoint: {settings.heartbeat_endpoint}")
+    if settings.autostart_on_launch:
+        print("Boot autostart is enabled. Launching machine runtime immediately...")
+        agent.autostart_runtime()
 
     try:
         while True:
